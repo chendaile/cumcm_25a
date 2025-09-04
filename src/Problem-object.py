@@ -95,13 +95,18 @@ class Global_System:
             np.array(initial_positions['drones'][f'M{str(i)}'])) for i in [1, 2, 3]}
         self.true_goal = True_goal(np.array(initial_positions['true_goal']))
 
-    def detect_occlusion(self, global_t):
+    def detect_occlusion_Q1(self, global_t, missile, jammer):
         pass
 
 
-def main():
+def main_Q1():
     with open("data-bin/initial_positions.json") as f:
         initial_positions = json.load(f)
     with open("data-bin/drones_forward_vector-Q1.json") as f:
         drones_forward_vector = json.load(f)
     global_sys = Global_System(initial_positions, drones_forward_vector)
+    # 此时我们之分析M1以及FY1
+    M1 = global_sys.Missiles['M1']
+    FY1 = global_sys.Drones['FY1']
+    jammer1 = FY1.create_jammer(1.5, 3.6)
+    global_sys.detect_occlusion(5, M1, jammer1)  # 比如检测第5秒
