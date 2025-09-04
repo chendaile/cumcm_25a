@@ -1,6 +1,6 @@
-import numpy as np
 import json
 from Problem_object import Global_System_Q123
+from Virtualizer import virtualize_single_jammer
 
 
 def optimize_Q2():
@@ -15,7 +15,7 @@ def optimize_Q2():
     print("Optimizing single missile with single drone and multiple jammers")
 
     best_params = global_sys.optimize_single_missile_drone_all_jammers(
-        drone_id='FY1', n_jammers=1, population_size=30, generations=50, plot_convergence=True)
+        drone_id='FY1', n_jammers=1, population_size=30, generations=100, plot_convergence=True)
 
     if best_params:
         print(f"\nOptimization completed!")
@@ -39,9 +39,10 @@ def optimize_Q2():
         print(f"\nVerification: {final_duration:.2f} seconds coverage")
 
         # Visualize one moment
-        global_sys.virtualize_single_jammer(
+        virtualize_single_jammer(
             8.0, global_sys.Missiles['M1'], global_sys.Drones['FY1'],
-            global_sys.jammers['FY1'][0] if global_sys.jammers['FY1'] else None)
+            global_sys.jammers['FY1'][0] if global_sys.jammers['FY1'] else None,
+            global_sys.true_goal)
 
     else:
         print("Optimization failed to find valid parameters")

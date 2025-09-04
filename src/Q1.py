@@ -1,6 +1,6 @@
-import numpy as np
 import json
 from Problem_object import Global_System_Q123
+from Virtualizer import virtualize_single_jammer
 
 
 def find_cover_seconds_Q1():
@@ -28,8 +28,9 @@ def test_Q1(tmp_time=7.9):
     result = global_sys.detect_occlusion_single_jammer(
         tmp_time, global_sys.Missiles['M1'], global_sys.jammers['FY1'][0])
     print(f"t={tmp_time:.2f}s: occlusion detected = {result}")
-    global_sys.virtualize_single_jammer(
-        tmp_time, global_sys.Missiles['M1'], global_sys.Drones['FY1'], global_sys.jammers['FY1'][0])
+    virtualize_single_jammer(
+        tmp_time, global_sys.Missiles['M1'], global_sys.Drones['FY1'], global_sys.jammers['FY1'][0],
+        global_sys.true_goal)
 
 
 if __name__ == '__main__':

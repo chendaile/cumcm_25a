@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 """Default units are m and m/s"""
 
@@ -160,73 +159,6 @@ class Global_System_Q123:
                 return True
         return False
 
-    def virtualize_single_jammer(self, global_t, missile, drone, jammer):
-        fig = plt.figure(figsize=(12, 10))
-        ax = fig.add_subplot(111, projection='3d')
-
-        missile_pos = missile.get_pos(global_t)
-        drone_pos = drone.get_pos(global_t)
-        target_pos = self.true_goal.bottom_center_pos
-
-        ax.scatter(*missile_pos, color='red', s=100, label='M1 Missile')
-        ax.scatter(*drone_pos, color='blue', s=100, label='FY1 Drone')
-        ax.scatter(*target_pos, color='g', s=70, label='True Target')
-
-        if global_t >= jammer.smoke.father_t and (global_t - jammer.smoke.father_t) <= jammer.smoke.smoke_duration:
-            smoke_pos = jammer.smoke.get_pos(global_t)
-
-            u = np.linspace(0, 2 * np.pi, 50)
-            v = np.linspace(0, np.pi, 50)
-            x_smoke = jammer.smoke.radius * \
-                np.outer(np.cos(u), np.sin(v)) + smoke_pos[0]
-            y_smoke = jammer.smoke.radius * \
-                np.outer(np.sin(u), np.sin(v)) + smoke_pos[1]
-            z_smoke = jammer.smoke.radius * \
-                np.outer(np.ones(np.size(u)), np.cos(v)) + smoke_pos[2]
-
-            ax.plot_surface(x_smoke, y_smoke, z_smoke,
-                            alpha=0.4, color='orange')
-            ax.scatter(*smoke_pos, color='red', s=200,
-                       marker='o', label='Smoke Center')
-
-            missile_to_smoke = smoke_pos - missile_pos
-            smoke_distance = np.linalg.norm(missile_to_smoke)
-
-            if smoke_distance > jammer.smoke.radius:
-                missile_to_smoke_unit = missile_to_smoke / smoke_distance
-
-                perp1 = np.array([1, 0, 0]) if abs(
-                    missile_to_smoke_unit[0]) < 0.9 else np.array([0, 1, 0])
-                perp1 = perp1 - \
-                    np.dot(perp1, missile_to_smoke_unit) * \
-                    missile_to_smoke_unit
-                perp1 = perp1 / np.linalg.norm(perp1)
-                perp2 = np.cross(missile_to_smoke_unit, perp1)
-
-                sin_alpha = jammer.smoke.radius / smoke_distance
-                cos_alpha = np.sqrt(1 - sin_alpha**2)
-
-                cone_points = []
-                cone_theta = np.linspace(0, 2*np.pi, 100)
-                for theta_val in cone_theta:
-                    tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
-                        (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
-                    cone_end = missile_pos + 25000 * tangent_dir
-                    cone_points.append(cone_end)
-                    ax.plot([missile_pos[0], cone_end[0]], [missile_pos[1], cone_end[1]], [
-                            missile_pos[2], cone_end[2]], 'r-', alpha=0.2)
-
-        ax.set_xlabel('X (m)')
-        ax.set_ylabel('Y (m)')
-        ax.set_zlabel('Z (m)')
-        ax.legend()
-        ax.set_title(f'Smoke Jamming Visualization at t={global_t}s')
-
-        plt.tight_layout()
-        # plt.savefig(
-        #     f'output/visualization_t{global_t:.2f}.png', dpi=800, bbox_inches='tight')
-        plt.show()
-
     def get_cover_seconds_all_jammers(self):
         covered_times = []
         test_times = np.arange(5.1, 25, 0.01)
@@ -255,7 +187,7 @@ class Global_System_Q123:
     def optimize_single_missile_drone_all_jammers(self, drone_id='FY1', n_jammers=1, population_size=50, generations=100, plot_convergence=False):
         import random
         import matplotlib.pyplot as plt
-        
+
         def create_individual():
             velocity_x = random.uniform(-140, 140)
             velocity_y = random.uniform(-140, 140)
@@ -268,29 +200,30 @@ class Global_System_Q123:
                 scale = 140 / velocity_magnitude
                 velocity_x *= scale
                 velocity_y *= scale
-            
+
             jammers = []
             for _ in range(n_jammers):
                 father_t = random.uniform(0.5, 3.0)
                 smoke_delay = random.uniform(2.0, 5.0)
                 jammers.append((father_t, smoke_delay))
-            
+
             return [velocity_x, velocity_y, jammers]
-        
+
         def evaluate_individual(individual):
             self.reset_jammers(drone_id)
-            self.update_drone_velocity(drone_id, [individual[0], individual[1], 0])
-            
+            self.update_drone_velocity(
+                drone_id, [individual[0], individual[1], 0])
+
             for father_t, smoke_delay in individual[2]:
                 self.add_jammers(1, father_t, smoke_delay)
-            
+
             return self.get_cover_seconds_all_jammers()
-        
+
         def crossover(parent1, parent2):
             child = []
             child.append((parent1[0] + parent2[0]) / 2 + random.gauss(0, 10))
             child.append((parent1[1] + parent2[1]) / 2 + random.gauss(0, 10))
-            
+
             velocity_magnitude = np.sqrt(child[0]**2 + child[1]**2)
             if velocity_magnitude < 70:
                 scale = 70 / velocity_magnitude
@@ -300,7 +233,7 @@ class Global_System_Q123:
                 scale = 140 / velocity_magnitude
                 child[0] *= scale
                 child[1] *= scale
-            
+
             child_jammers = []
             for i in range(len(parent1[2])):
                 if random.random() < 0.5:
@@ -308,15 +241,16 @@ class Global_System_Q123:
                 else:
                     child_jammers.append(parent2[2][i])
             child.append(child_jammers)
-            
+
             return child
-        
+
         def mutate(individual):
             if random.random() < 0.2:
                 individual[0] += random.gauss(0, 20)
                 individual[1] += random.gauss(0, 20)
-                
-                velocity_magnitude = np.sqrt(individual[0]**2 + individual[1]**2)
+
+                velocity_magnitude = np.sqrt(
+                    individual[0]**2 + individual[1]**2)
                 if velocity_magnitude < 70:
                     scale = 70 / velocity_magnitude
                     individual[0] *= scale
@@ -325,71 +259,83 @@ class Global_System_Q123:
                     scale = 140 / velocity_magnitude
                     individual[0] *= scale
                     individual[1] *= scale
-            
+
             for i in range(len(individual[2])):
                 if random.random() < 0.1:
                     individual[2][i] = (
-                        max(0.5, min(3.0, individual[2][i][0] + random.gauss(0, 0.3))),
-                        max(2.0, min(5.0, individual[2][i][1] + random.gauss(0, 0.3)))
+                        max(0.5, min(
+                            3.0, individual[2][i][0] + random.gauss(0, 0.3))),
+                        max(2.0, min(
+                            5.0, individual[2][i][1] + random.gauss(0, 0.3)))
                     )
-            
+
             return individual
-        
+
         population = [create_individual() for _ in range(population_size)]
         best_fitness_history = []
         avg_fitness_history = []
         best_individual = None
         best_fitness = 0
-        
+
         for generation in range(generations):
             fitnesses = []
             for individual in population:
                 fitness = evaluate_individual(individual)
                 fitnesses.append(fitness)
-                
+
                 if fitness > best_fitness:
                     best_fitness = fitness
                     best_individual = individual.copy()
-                    print(f"Generation {generation+1}: New best {fitness:.3f}s")
-            
+                    print(
+                        f"Generation {generation+1}: New best {fitness:.3f}s")
+
             best_fitness_history.append(best_fitness)
             avg_fitness_history.append(np.mean(fitnesses))
-            
+
             population_with_fitness = list(zip(population, fitnesses))
             population_with_fitness.sort(key=lambda x: x[1], reverse=True)
-            
+
             new_population = []
             elite_size = population_size // 4
             for i in range(elite_size):
                 new_population.append(population_with_fitness[i][0])
-            
+
             while len(new_population) < population_size:
-                parent1 = random.choices(population, weights=fitnesses, k=1)[0]
-                parent2 = random.choices(population, weights=fitnesses, k=1)[0]
+                if sum(fitnesses) > 0:
+                    parent1 = random.choices(
+                        population, weights=fitnesses, k=1)[0]
+                    parent2 = random.choices(
+                        population, weights=fitnesses, k=1)[0]
+                else:
+                    parent1 = random.choice(population)
+                    parent2 = random.choice(population)
                 child = crossover(parent1, parent2)
                 child = mutate(child)
                 new_population.append(child)
-            
+
             population = new_population
-        
+
         if plot_convergence:
             plt.figure(figsize=(10, 6))
-            plt.plot(range(1, generations+1), best_fitness_history, 'r-', linewidth=2, label='Best Fitness')
-            plt.plot(range(1, generations+1), avg_fitness_history, 'b--', alpha=0.7, label='Average Fitness')
+            plt.plot(range(1, generations+1), best_fitness_history,
+                     'r-', linewidth=2, label='Best Fitness')
+            plt.plot(range(1, generations+1), avg_fitness_history,
+                     'b--', alpha=0.7, label='Average Fitness')
             plt.xlabel('Generation')
             plt.ylabel('Coverage Duration (s)')
             plt.title('Genetic Algorithm Optimization Convergence')
             plt.legend()
             plt.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig('output/genetic_algorithm_convergence.png', dpi=150, bbox_inches='tight')
+            plt.savefig('output/genetic_algorithm_convergence.png',
+                        dpi=150, bbox_inches='tight')
             plt.show()
-        
+
         if best_individual:
             return {
                 'velocity': [best_individual[0], best_individual[1], 0],
                 'jammers': best_individual[2],
                 'duration': best_fitness
             }
-        
+
         return None
