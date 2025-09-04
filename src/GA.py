@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 
 class GeneticOptimizer:
@@ -13,7 +14,6 @@ class GeneticOptimizer:
         self.best_fitness = 0
 
     def create_individual(self):
-        import random
         velocity_x = random.uniform(-140, 140)
         velocity_y = random.uniform(-140, 140)
         velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
@@ -29,10 +29,9 @@ class GeneticOptimizer:
 
         jammers = []
         for _ in range(self.n_jammers):
-            father_t = random.uniform(0.0, 5)
-            smoke_delay = random.uniform(0.0, 5)
+            father_t = random.uniform(0.0, 10)
+            smoke_delay = random.uniform(0.0, 10)
             jammers.append((father_t, smoke_delay))
-
         return [velocity_x, velocity_y, jammers]
 
     def evaluate_individual(self, individual):
@@ -41,8 +40,8 @@ class GeneticOptimizer:
             self.drone_id, [individual[0], individual[1], 0])
 
         for father_t, smoke_delay in individual[2]:
-            self.global_system.add_jammers(1, father_t, smoke_delay)
-
+            self.global_system.add_jammers(
+                self.drone_id, father_t, smoke_delay)
         return self.global_system.get_cover_seconds_all_jammers()
 
     def crossover(self, parent1, parent2):
@@ -53,7 +52,6 @@ class GeneticOptimizer:
                      * parent2[0] + random.gauss(0, 5))
         child.append(alpha * parent1[1] + (1 - alpha)
                      * parent2[1] + random.gauss(0, 5))
-
         velocity_magnitude = np.sqrt(child[0]**2 + child[1]**2)
         if velocity_magnitude < 70:
             scale = 70 / velocity_magnitude
@@ -77,18 +75,15 @@ class GeneticOptimizer:
                 child_jammers.append(random.choice(
                     [parent1[2][i], parent2[2][i]]))
         child.append(child_jammers)
-
         return child
 
     def mutate(self, individual, generation):
-        import random
         mutation_rate = 0.25 if generation < self.generations // 2 else 0.15
 
         if random.random() < mutation_rate:
             noise_scale = max(5, 30 - generation * 25 / self.generations)
             individual[0] += random.gauss(0, noise_scale)
             individual[1] += random.gauss(0, noise_scale)
-
             velocity_magnitude = np.sqrt(individual[0]**2 + individual[1]**2)
             if velocity_magnitude < 70:
                 scale = 70 / velocity_magnitude
@@ -111,24 +106,17 @@ class GeneticOptimizer:
                                                individual[2][i][1] + random.gauss(0, noise_delay)))
 
                 individual[2][i] = (new_father_t, new_smoke_delay)
-
         return individual
 
     def tournament_selection(self, population, fitnesses, tournament_size=3):
-        import random
-        if sum(fitnesses) > 0:
-            tournament = random.choices(
-                list(zip(population, fitnesses)), k=tournament_size)
-            return max(tournament, key=lambda x: x[1])[0]
-        else:
-            return random.choice(population)
+        tournament = random.choices(
+            list(zip(population, fitnesses)), k=tournament_size)
+        return max(tournament, key=lambda x: x[1])[0]
 
     def optimize(self, plot_convergence=False):
-
         population = [self.create_individual()
                       for _ in range(self.population_size)]
         best_fitness_history = []
-        avg_fitness_history = []
 
         for generation in range(self.generations):
             fitnesses = []
@@ -143,8 +131,6 @@ class GeneticOptimizer:
                         f"Generation {generation+1}: New best {fitness:.3f}s")
 
             best_fitness_history.append(self.best_fitness)
-            avg_fitness_history.append(np.mean(fitnesses))
-
             population_with_fitness = list(zip(population, fitnesses))
             population_with_fitness.sort(key=lambda x: x[1], reverse=True)
 
@@ -166,8 +152,6 @@ class GeneticOptimizer:
             plt.figure(figsize=(10, 6))
             plt.plot(range(1, self.generations+1), best_fitness_history,
                      'r-', linewidth=2, label='Best Fitness')
-            plt.plot(range(1, self.generations+1), avg_fitness_history,
-                     'b--', alpha=0.7, label='Average Fitness')
             plt.xlabel('Generation')
             plt.ylabel('Coverage Duration (s)')
             plt.title('Genetic Algorithm Optimization Convergence')

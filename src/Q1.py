@@ -10,7 +10,7 @@ def find_cover_seconds_Q1():
         drones_forward_vector = json.load(f)
 
     global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
-    global_sys.add_jammers(1, 1.5, 3.6)
+    global_sys.add_jammers('FY1', 1.5, 3.6)
 
     duration = global_sys.get_cover_seconds_all_jammers()
     print(f"Total coverage duration: {duration:.2f} seconds")
@@ -23,7 +23,7 @@ def test_Q1(tmp_time=7.9):
         drones_forward_vector = json.load(f)
 
     global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
-    global_sys.add_jammers(1, 1.5, 3.6)
+    global_sys.add_jammers('FY1', 1.5, 3.6)
 
     result = global_sys.detect_occlusion_single_jammer(
         tmp_time, global_sys.Missiles['M1'], global_sys.jammers['FY1'][0])
@@ -34,5 +34,5 @@ def test_Q1(tmp_time=7.9):
 
 
 if __name__ == '__main__':
-    # find_cover_seconds_Q1()
-    test_Q1()
+    find_cover_seconds_Q1()
+    # test_Q1()

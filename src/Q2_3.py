@@ -1,5 +1,6 @@
 import json
 from Problem_object import Global_System_Q123
+from Virtualizer import virtualize_all_jammers
 
 
 def optimize_Q23():
@@ -23,21 +24,23 @@ def optimize_Q23():
             print(
                 f"  Jammer {i+1}: release_t={father_t:.2f}s, smoke_delay={smoke_delay:.2f}s")
 
-        global_sys.reset_jammers('FY1')
-        global_sys.update_drone_velocity('FY1', best_params['velocity'])
-        for father_t, smoke_delay in best_params['jammers']:
-            global_sys.add_jammers(1, father_t, smoke_delay)
-        final_duration = global_sys.get_cover_seconds_all_jammers()
-        cover_intervals = global_sys.get_cover_intervals_all_jammers()
-        print(f"\nVerification: {final_duration:.2f} seconds coverage")
-        print(f"Coverage intervals:")
-        for i, (start, end) in enumerate(cover_intervals):
-            print(
-                f"  Interval {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
-        from Virtualizer import virtualize_all_jammers
-        virtualize_all_jammers(
-            8.0, global_sys.Missiles['M1'], global_sys.Drones['FY1'],
-            global_sys.jammers['FY1'], global_sys.true_goal)
+        def test():
+            global_sys.reset_jammers('FY1')
+            global_sys.update_drone_velocity('FY1', best_params['velocity'])
+            for father_t, smoke_delay in best_params['jammers']:
+                global_sys.add_jammers('FY1', father_t, smoke_delay)
+            final_duration = global_sys.get_cover_seconds_all_jammers()
+            cover_intervals = global_sys.get_cover_intervals_all_jammers()
+            print(f"\nVerification: {final_duration:.2f} seconds coverage")
+            print(f"Coverage intervals:")
+            for i, (start, end) in enumerate(cover_intervals):
+                print(
+                    f"  Interval {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
+            virtualize_all_jammers(
+                8.0, global_sys.Missiles['M1'], global_sys.Drones['FY1'],
+                global_sys.jammers['FY1'], global_sys.true_goal)
+
+            test()
     else:
         print("Optimization failed to find valid parameters")
 

@@ -23,7 +23,7 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
 
     colors = ['orange', 'yellow', 'cyan', 'magenta', 'lime']
     active_smoke_count = 0
-    
+
     for i, jammer in enumerate(jammers):
         if global_t >= jammer.smoke.father_t and (global_t - jammer.smoke.father_t) <= jammer.smoke.smoke_duration:
             active_smoke_count += 1
@@ -62,7 +62,7 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
                 cos_alpha = np.sqrt(1 - sin_alpha**2)
 
                 cone_points = []
-                cone_theta = np.linspace(0, 2*np.pi, 36)  # 减少线条数量避免过度拥挤
+                cone_theta = np.linspace(0, 2*np.pi, 150)  # 减少线条数量避免过度拥挤
                 for theta_val in cone_theta:
                     tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
                         (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
@@ -75,7 +75,8 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
     ax.set_ylabel('Y (m)')
     ax.set_zlabel('Z (m)')
     ax.legend()
-    ax.set_title(f'Smoke Jamming Visualization at t={global_t}s ({active_smoke_count} active smokes)')
+    ax.set_title(
+        f'Smoke Jamming Visualization at t={global_t}s ({active_smoke_count} active smokes)')
 
     plt.tight_layout()
     plt.show()
