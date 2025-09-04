@@ -14,8 +14,8 @@ class GeneticOptimizer:
         self.best_fitness = 0
 
     def create_individual(self):
-        velocity_x = random.uniform(-140, 140)
-        velocity_y = random.uniform(-140, 140)
+        velocity_x = -126
+        velocity_y = 1.5
         velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
 
         if velocity_magnitude < 70:
@@ -29,8 +29,8 @@ class GeneticOptimizer:
 
         jammers = []
         for _ in range(self.n_jammers):
-            father_t = random.uniform(0.0, 10)
-            smoke_delay = random.uniform(0.0, 10)
+            father_t = 1.15
+            smoke_delay = 3.99
             jammers.append((father_t, smoke_delay))
         return [velocity_x, velocity_y, jammers]
 
@@ -100,9 +100,9 @@ class GeneticOptimizer:
                 noise_delay = max(0.1, 0.6 - generation *
                                   0.5 / self.generations)
 
-                new_father_t = max(0.0, min(10.0,
+                new_father_t = max(0.0, min(5.0,
                                             individual[2][i][0] + random.gauss(0, noise_t)))
-                new_smoke_delay = max(0.0, min(10.0,
+                new_smoke_delay = max(0.0, min(5.0,
                                                individual[2][i][1] + random.gauss(0, noise_delay)))
 
                 individual[2][i] = (new_father_t, new_smoke_delay)
