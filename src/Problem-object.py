@@ -1,4 +1,5 @@
 import numpy as np
+import json
 
 
 """Default units are m and m/s"""
@@ -85,15 +86,22 @@ class Drone:
                       self.forward_vector, smoke_release_delay)
 
 
-def check_occlusion(missile_pos, target_pos, smoke_pos, smoke_radius):
-    missile_to_target = target_pos - missile_pos
-    missile_to_smoke = smoke_pos - missile_pos
-    
-    if np.dot(missile_to_smoke, missile_to_target) <= 0:
-        return False
-        
-    proj_length = np.dot(missile_to_smoke, missile_to_target) / np.linalg.norm(missile_to_target)
-    proj_point = missile_pos + proj_length * missile_to_target / np.linalg.norm(missile_to_target)
-    
-    distance = np.linalg.norm(smoke_pos - proj_point)
-    return distance <= smoke_radius
+class Global_System:
+    def __init__(self, initial_positions: dict, drones_forward_vector: dict):
+        self.Drones = {f'FY{str(i)}': Drone(
+            np.array(initial_positions['drones'][f'FY{str(i)}']),
+            np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1, 2, 3, 4, 5]}
+        self.Missiles = {f'M{str(i)}': Missile(
+            np.array(initial_positions['drones'][f'M{str(i)}'])) for i in [1, 2, 3]}
+        self.true_goal = True_goal(np.array(initial_positions['true_goal']))
+
+    def detect_occlusion(self, global_t):
+        pass
+
+
+def main():
+    with open("data-bin/initial_positions.json") as f:
+        initial_positions = json.load(f)
+    with open("data-bin/drones_forward_vector-Q1.json") as f:
+        drones_forward_vector = json.load(f)
+    global_sys = Global_System(initial_positions, drones_forward_vector)
