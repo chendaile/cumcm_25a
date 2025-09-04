@@ -86,13 +86,13 @@ class Drone:
                       self.forward_vector, smoke_release_delay)
 
 
-class Global_System:
+class Global_System_Q1:
     def __init__(self, initial_positions: dict, drones_forward_vector: dict):
         self.Drones = {f'FY{str(i)}': Drone(
             np.array(initial_positions['drones'][f'FY{str(i)}']),
-            np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1, 2, 3, 4, 5]}
+            np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1]}
         self.Missiles = {f'M{str(i)}': Missile(
-            np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1, 2, 3]}
+            np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1]}
         self.true_goal = True_goal(
             np.array(initial_positions['target']['true_target']))
 
@@ -131,15 +131,35 @@ class Global_System:
             return False
 
 
+def check_occlusion(missile_pos, target_pos, smoke_pos, smoke_radius):
+    missile_to_target = target_pos - missile_pos
+    missile_to_smoke = smoke_pos - missile_pos
+
+    if np.dot(missile_to_smoke, missile_to_target) <= 0:
+        return False
+
+    proj_length = np.dot(missile_to_smoke, missile_to_target) / \
+        np.linalg.norm(missile_to_target)
+    proj_point = missile_pos + proj_length * \
+        missile_to_target / np.linalg.norm(missile_to_target)
+
+    distance = np.linalg.norm(smoke_pos - proj_point)
+    return distance <= smoke_radius
+
+
 def main_Q1():
     with open("data-bin/initial_positions.json") as f:
         initial_positions = json.load(f)
     with open("data-bin/drones_forward_vector-Q1.json") as f:
         drones_forward_vector = json.load(f)
-    global_sys = Global_System(initial_positions, drones_forward_vector)
+    global_sys = Global_System_Q1(initial_positions, drones_forward_vector)
     # 此时我们之分析M1以及FY1
     M1 = global_sys.Missiles['M1']
     FY1 = global_sys.Drones['FY1']
     jammer1 = FY1.create_jammer(1.5, 3.6)
     result = global_sys.detect_occlusion_Q1(5, M1, jammer1)
     print(f"At t=5s, occlusion detected: {result}")
+
+
+if __name__ == '__main__':
+    main_Q1()
