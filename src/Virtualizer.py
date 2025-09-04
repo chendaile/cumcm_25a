@@ -17,9 +17,9 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
     drone_pos = drone.get_pos(global_t)
     target_pos = true_goal.bottom_center_pos
 
-    ax.scatter(*missile_pos, color='red', s=100, label='M1 Missile')
-    ax.scatter(*drone_pos, color='blue', s=100, label='FY1 Drone')
-    ax.scatter(*target_pos, color='g', s=70, label='True Target')
+    ax.scatter(*missile_pos, color='darkred', s=60, label='M1 Missile')
+    ax.scatter(*drone_pos, color='blue', s=60, label='FY1 Drone')
+    ax.scatter(*target_pos, color='green', s=50, label='True Target')
 
     colors = ['orange', 'yellow', 'cyan', 'magenta', 'lime']
     active_smoke_count = 0
@@ -41,7 +41,7 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
 
             ax.plot_surface(x_smoke, y_smoke, z_smoke,
                             alpha=0.4, color=color)
-            ax.scatter(*smoke_pos, color='red', s=200,
+            ax.scatter(*smoke_pos, color='orange', s=30,
                        marker='o', label=f'Smoke {i+1} Center')
 
             missile_to_smoke = smoke_pos - missile_pos
@@ -69,7 +69,7 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
                     cone_end = missile_pos + 25000 * tangent_dir
                     cone_points.append(cone_end)
                     ax.plot([missile_pos[0], cone_end[0]], [missile_pos[1], cone_end[1]], [
-                            missile_pos[2], cone_end[2]], 'r-', alpha=0.1)
+                            missile_pos[2], cone_end[2]], color='red', alpha=0.2, linewidth=0.5)
 
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
