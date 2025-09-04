@@ -90,15 +90,16 @@ class Global_System_Q123:
         self.Drones = {f'FY{str(i)}': Drone(
             np.array(initial_positions['drones'][f'FY{str(i)}']),
             np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1]}
-        self.jammers = {}
+        self.jammers = {f'FY{str(i)}': [] for i in [1]}
         self.Missiles = {f'M{str(i)}': Missile(
             np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1]}
         self.true_goal = True_goal(
             np.array(initial_positions['target']['true_target']))
 
     def add_jammers(self, index, jammer_release_delay, smoke_release_delay):
-        self.jammers[f'FY{str(index)}'] = self.Drones[f'FY{str(index)}'].create_jammer(
-            jammer_release_delay, smoke_release_delay)
+        self.jammers[f'FY{str(index)}'].append(
+            self.Drones[f'FY{str(index)}'].create_jammer(
+                jammer_release_delay, smoke_release_delay))
 
     def check_occlusion(self, missile_pos, target_pos, smoke_pos, smoke_radius=10):
         missile_to_target = target_pos - missile_pos
@@ -214,6 +215,10 @@ class Global_System_Q123:
         ax.set_title(f'Smoke Jamming Visualization at t={global_t}s')
 
         plt.tight_layout()
-        plt.savefig(
-            f'output/visualization_t{global_t:.2f}.png', dpi=800, bbox_inches='tight')
-        # plt.show()
+        # plt.savefig(
+        #     f'output/visualization_t{global_t:.2f}.png', dpi=800, bbox_inches='tight')
+        plt.show()
+
+    def optimize_single_missile_drone_all_jammers(self, single_drone):
+        # 优化参数是 每个jammer的father_t,smoke_release_delay以及单个single_drone的行走速度vx,vy
+        pass
