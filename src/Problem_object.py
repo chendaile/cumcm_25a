@@ -1,5 +1,5 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 """Default units are m and m/s"""
 
@@ -85,28 +85,135 @@ class Drone:
                       self.forward_vector, smoke_release_delay)
 
 
-class Global_System_Q1:
+class Global_System_Q123:
     def __init__(self, initial_positions: dict, drones_forward_vector: dict):
         self.Drones = {f'FY{str(i)}': Drone(
             np.array(initial_positions['drones'][f'FY{str(i)}']),
             np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1]}
+        self.jammers = {}
         self.Missiles = {f'M{str(i)}': Missile(
             np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1]}
         self.true_goal = True_goal(
             np.array(initial_positions['target']['true_target']))
 
+    def add_jammers(self, index, jammer_release_delay, smoke_release_delay):
+        self.jammers[f'FY{str(index)}'] = self.Drones[f'FY{str(index)}'].create_jammer(
+            jammer_release_delay, smoke_release_delay)
 
-def check_occlusion(missile_pos, target_pos, smoke_pos, smoke_radius):
-    missile_to_target = target_pos - missile_pos
-    missile_to_smoke = smoke_pos - missile_pos
+    def check_occlusion(self, missile_pos, target_pos, smoke_pos, smoke_radius=10):
+        missile_to_target = target_pos - missile_pos
+        missile_to_smoke = smoke_pos - missile_pos
 
-    if np.dot(missile_to_smoke, missile_to_target) <= 0:
-        return False
+        if np.dot(missile_to_smoke, missile_to_target) <= 0:
+            return False
 
-    proj_length = np.dot(missile_to_smoke, missile_to_target) / \
-        np.linalg.norm(missile_to_target)
-    proj_point = missile_pos + proj_length * \
-        missile_to_target / np.linalg.norm(missile_to_target)
+        proj_length = np.dot(missile_to_smoke, missile_to_target) / \
+            np.linalg.norm(missile_to_target)
+        proj_point = missile_pos + proj_length * \
+            missile_to_target / np.linalg.norm(missile_to_target)
 
-    distance = np.linalg.norm(smoke_pos - proj_point)
-    return distance <= smoke_radius
+        distance = np.linalg.norm(smoke_pos - proj_point)
+        return distance <= smoke_radius
+
+    def detect_occlusion_single_missile_jammer(self, global_t, missile, jammer):
+        missile_pos = missile.get_pos(global_t)
+        if global_t < jammer.smoke.father_t:
+            return False
+        smoke_operate_t = global_t - jammer.smoke.father_t
+        if smoke_operate_t > jammer.smoke.smoke_duration:
+            return False
+
+        smoke_pos = jammer.smoke.get_pos(global_t)
+        target_bottom = self.true_goal.bottom_center_pos
+        target_top = target_bottom + \
+            np.array([0, 0, self.true_goal.height])
+        occlusion_points = [
+            target_bottom + np.array([self.true_goal.radius, 0, 0]),
+            target_bottom + np.array([0, self.true_goal.radius, 0]),
+            target_bottom + np.array([-self.true_goal.radius, 0, 0]),
+            target_bottom + np.array([0, -self.true_goal.radius, 0]),
+            target_bottom +
+            np.array([self.true_goal.radius, 0, self.true_goal.height/2]),
+            target_bottom +
+            np.array([0, self.true_goal.radius, self.true_goal.height/2]),
+            target_bottom +
+            np.array([-self.true_goal.radius, 0, self.true_goal.height/2]),
+            target_bottom +
+            np.array([0, -self.true_goal.radius, self.true_goal.height/2]),
+            target_top + np.array([self.true_goal.radius, 0, 0]),
+            target_top + np.array([0, self.true_goal.radius, 0]),
+            target_top + np.array([-self.true_goal.radius, 0, 0]),
+            target_top + np.array([0, -self.true_goal.radius, 0])
+        ]
+
+        for point in occlusion_points:
+            if not self.check_occlusion(missile_pos, point, smoke_pos):
+                return False
+        return True
+
+    def virtualize_single_missile_jammer(self, global_t, missile, drone, jammer):
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111, projection='3d')
+
+        missile_pos = missile.get_pos(global_t)
+        drone_pos = drone.get_pos(global_t)
+        target_pos = self.true_goal.bottom_center_pos
+
+        ax.scatter(*missile_pos, color='red', s=100, label='M1 Missile')
+        ax.scatter(*drone_pos, color='blue', s=100, label='FY1 Drone')
+        ax.scatter(*target_pos, color='g', s=70, label='True Target')
+
+        if global_t >= jammer.smoke.father_t and (global_t - jammer.smoke.father_t) <= jammer.smoke.smoke_duration:
+            smoke_pos = jammer.smoke.get_pos(global_t)
+
+            u = np.linspace(0, 2 * np.pi, 50)
+            v = np.linspace(0, np.pi, 50)
+            x_smoke = jammer.smoke.radius * \
+                np.outer(np.cos(u), np.sin(v)) + smoke_pos[0]
+            y_smoke = jammer.smoke.radius * \
+                np.outer(np.sin(u), np.sin(v)) + smoke_pos[1]
+            z_smoke = jammer.smoke.radius * \
+                np.outer(np.ones(np.size(u)), np.cos(v)) + smoke_pos[2]
+
+            ax.plot_surface(x_smoke, y_smoke, z_smoke,
+                            alpha=0.4, color='orange')
+            ax.scatter(*smoke_pos, color='red', s=200,
+                       marker='o', label='Smoke Center')
+
+            missile_to_smoke = smoke_pos - missile_pos
+            smoke_distance = np.linalg.norm(missile_to_smoke)
+
+            if smoke_distance > jammer.smoke.radius:
+                missile_to_smoke_unit = missile_to_smoke / smoke_distance
+
+                perp1 = np.array([1, 0, 0]) if abs(
+                    missile_to_smoke_unit[0]) < 0.9 else np.array([0, 1, 0])
+                perp1 = perp1 - \
+                    np.dot(perp1, missile_to_smoke_unit) * \
+                    missile_to_smoke_unit
+                perp1 = perp1 / np.linalg.norm(perp1)
+                perp2 = np.cross(missile_to_smoke_unit, perp1)
+
+                sin_alpha = jammer.smoke.radius / smoke_distance
+                cos_alpha = np.sqrt(1 - sin_alpha**2)
+
+                cone_points = []
+                cone_theta = np.linspace(0, 2*np.pi, 100)
+                for theta_val in cone_theta:
+                    tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
+                        (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
+                    cone_end = missile_pos + 25000 * tangent_dir
+                    cone_points.append(cone_end)
+                    ax.plot([missile_pos[0], cone_end[0]], [missile_pos[1], cone_end[1]], [
+                            missile_pos[2], cone_end[2]], 'r-', alpha=0.2)
+
+        ax.set_xlabel('X (m)')
+        ax.set_ylabel('Y (m)')
+        ax.set_zlabel('Z (m)')
+        ax.legend()
+        ax.set_title(f'Smoke Jamming Visualization at t={global_t}s')
+
+        plt.tight_layout()
+        plt.savefig(
+            f'output/visualization_t{global_t:.2f}.png', dpi=800, bbox_inches='tight')
+        # plt.show()
