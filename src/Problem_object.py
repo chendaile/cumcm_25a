@@ -1,6 +1,23 @@
 import numpy as np
+from numba import njit
 
 """Default units are m and m/s"""
+
+
+@njit
+def check_occlusion_numba(missile_pos, target_pos, smoke_pos, smoke_radius=10):
+    missile_to_target = target_pos - missile_pos
+    missile_to_smoke = smoke_pos - missile_pos
+
+    if np.dot(missile_to_smoke, missile_to_target) <= 0:
+        return False
+
+    target_norm = np.linalg.norm(missile_to_target)
+    proj_length = np.dot(missile_to_smoke, missile_to_target) / target_norm
+    proj_point = missile_pos + proj_length * missile_to_target / target_norm
+
+    distance = np.linalg.norm(smoke_pos - proj_point)
+    return distance <= smoke_radius
 
 
 class Missile():
@@ -103,19 +120,7 @@ class Global_System_Q123:
                 jammer_release_delay, smoke_release_delay))
 
     def check_occlusion(self, missile_pos, target_pos, smoke_pos, smoke_radius=10):
-        missile_to_target = target_pos - missile_pos
-        missile_to_smoke = smoke_pos - missile_pos
-
-        if np.dot(missile_to_smoke, missile_to_target) <= 0:
-            return False
-
-        proj_length = np.dot(missile_to_smoke, missile_to_target) / \
-            np.linalg.norm(missile_to_target)
-        proj_point = missile_pos + proj_length * \
-            missile_to_target / np.linalg.norm(missile_to_target)
-
-        distance = np.linalg.norm(smoke_pos - proj_point)
-        return distance <= smoke_radius
+        return check_occlusion_numba(missile_pos, target_pos, smoke_pos, smoke_radius)
 
     def detect_occlusion_single_jammer(self, global_t, missile, jammer):
         missile_pos = missile.get_pos(global_t)
@@ -161,16 +166,15 @@ class Global_System_Q123:
 
     def get_cover_seconds_all_jammers(self):
         covered_times = []
-        test_times = np.arange(5.1, 25, 0.01)
+        test_times = np.arange(5.1, 20, 0.05)
         for t in test_times:
             result = self.detect_occlusion_all_jammers(
                 t, self.Missiles['M1'], self.jammers['FY1'])
             if result:
                 covered_times.append(t)
-        # print(covered_times)
+
         if not covered_times:
             return 0.0
-        # total_duration = len(covered_times) * 0.01
         return covered_times[-1] - covered_times[0]
 
     def update_drone_velocity(self, drone_id, velocity_vector):
@@ -203,8 +207,8 @@ class Global_System_Q123:
 
             jammers = []
             for _ in range(n_jammers):
-                father_t = random.uniform(0.5, 3.0)
-                smoke_delay = random.uniform(2.0, 5.0)
+                father_t = random.uniform(0.0, 10.0)
+                smoke_delay = random.uniform(0.0, 10.0)
                 jammers.append((father_t, smoke_delay))
 
             return [velocity_x, velocity_y, jammers]
