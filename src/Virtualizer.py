@@ -79,4 +79,6 @@ def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
         f'Smoke Jamming Visualization at t={global_t}s ({active_smoke_count} active smokes)')
 
     plt.tight_layout()
+    plt.savefig(
+        f'tmp/visualization_t_{global_t}s.png', dpi=800, bbox_inches='tight')
     plt.show()

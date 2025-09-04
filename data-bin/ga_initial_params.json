@@ -1,0 +1,10 @@
+{
+  "velocity": {
+    "velocity_x": -126,
+    "velocity_y": 1.5
+  },
+  "jammers": {
+    "father_t": 1.15,
+    "smoke_delay": 3.99
+  }
+}

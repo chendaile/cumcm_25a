@@ -1,6 +1,9 @@
+import datetime
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+import json
 
 
 class GeneticOptimizer:
@@ -14,8 +17,10 @@ class GeneticOptimizer:
         self.best_fitness = 0
 
     def create_individual(self):
-        velocity_x = -126
-        velocity_y = 1.5
+        with open('data-bin/ga_initial_params.json', 'r', encoding='utf-8') as f:
+            params = json.load(f)
+        velocity_x = params['velocity']['velocity_x']
+        velocity_y = params['velocity']['velocity_y']
         velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
 
         if velocity_magnitude < 70:
@@ -29,8 +34,8 @@ class GeneticOptimizer:
 
         jammers = []
         for _ in range(self.n_jammers):
-            father_t = 1.15
-            smoke_delay = 3.99
+            father_t = params['jammers']['father_t']
+            smoke_delay = params['jammers']['smoke_delay']
             jammers.append((father_t, smoke_delay))
         return [velocity_x, velocity_y, jammers]
 
@@ -158,15 +163,33 @@ class GeneticOptimizer:
             plt.legend()
             plt.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig('output/genetic_algorithm_convergence.png',
-                        dpi=150, bbox_inches='tight')
+            plt.savefig('tmp/genetic_algorithm_convergence.png',
+                        dpi=800, bbox_inches='tight')
             plt.show()
 
         if self.best_individual:
-            return {
+            result = {
                 'velocity': [self.best_individual[0], self.best_individual[1], 0],
                 'jammers': self.best_individual[2],
                 'duration': self.best_fitness
             }
-
+            self.save_result_to_file(result)
+            return result
         return None
+
+    def save_result_to_file(self, result):
+        if not os.path.exists('output'):
+            os.makedirs('output')
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open('output/optimization_results.txt', 'a', encoding='utf-8') as f:
+            f.write(f"优化结果 - {timestamp}\n")
+            f.write(
+                f"速度: [{result['velocity'][0]:.2f}, {result['velocity'][1]:.2f}, {result['velocity'][2]:.2f}]\n")
+            f.write(f"覆盖时长: {result['duration']:.3f}秒\n")
+            f.write(f"干扰弹参数:\n")
+            for i, (father_t, smoke_delay) in enumerate(result['jammers']):
+                f.write(
+                    f"  干扰弹{i+1}: 发射时间={father_t:.2f}s, 烟雾延迟={smoke_delay:.2f}s\n")
+            f.write("-" * 50 + "\n")
+
+        print(f"结果已保存到 output/optimization_results.txt")
