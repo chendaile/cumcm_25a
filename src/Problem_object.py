@@ -221,8 +221,11 @@ class Global_System_Q123:
 
         def crossover(parent1, parent2):
             child = []
-            child.append((parent1[0] + parent2[0]) / 2 + random.gauss(0, 10))
-            child.append((parent1[1] + parent2[1]) / 2 + random.gauss(0, 10))
+            alpha = random.uniform(0.3, 0.7)
+            child.append(alpha * parent1[0] + (1 - alpha)
+                         * parent2[0] + random.gauss(0, 5))
+            child.append(alpha * parent1[1] + (1 - alpha)
+                         * parent2[1] + random.gauss(0, 5))
 
             velocity_magnitude = np.sqrt(child[0]**2 + child[1]**2)
             if velocity_magnitude < 70:
@@ -236,18 +239,27 @@ class Global_System_Q123:
 
             child_jammers = []
             for i in range(len(parent1[2])):
-                if random.random() < 0.5:
-                    child_jammers.append(parent1[2][i])
+                if random.random() < 0.6:
+                    beta = random.uniform(0.2, 0.8)
+                    father_t = beta * parent1[2][i][0] + \
+                        (1 - beta) * parent2[2][i][0]
+                    smoke_delay = beta * \
+                        parent1[2][i][1] + (1 - beta) * parent2[2][i][1]
+                    child_jammers.append((father_t, smoke_delay))
                 else:
-                    child_jammers.append(parent2[2][i])
+                    child_jammers.append(random.choice(
+                        [parent1[2][i], parent2[2][i]]))
             child.append(child_jammers)
 
             return child
 
         def mutate(individual):
-            if random.random() < 0.2:
-                individual[0] += random.gauss(0, 20)
-                individual[1] += random.gauss(0, 20)
+            mutation_rate = 0.25 if generation < generations // 2 else 0.15
+
+            if random.random() < mutation_rate:
+                noise_scale = max(5, 30 - generation * 25 / generations)
+                individual[0] += random.gauss(0, noise_scale)
+                individual[1] += random.gauss(0, noise_scale)
 
                 velocity_magnitude = np.sqrt(
                     individual[0]**2 + individual[1]**2)
@@ -261,13 +273,17 @@ class Global_System_Q123:
                     individual[1] *= scale
 
             for i in range(len(individual[2])):
-                if random.random() < 0.1:
-                    individual[2][i] = (
-                        max(0.5, min(
-                            3.0, individual[2][i][0] + random.gauss(0, 0.3))),
-                        max(2.0, min(
-                            5.0, individual[2][i][1] + random.gauss(0, 0.3)))
-                    )
+                if random.random() < 0.15:
+                    noise_t = max(0.1, 0.5 - generation * 0.4 / generations)
+                    noise_delay = max(
+                        0.1, 0.6 - generation * 0.5 / generations)
+
+                    new_father_t = max(0.5, min(3.0,
+                                                individual[2][i][0] + random.gauss(0, noise_t)))
+                    new_smoke_delay = max(2.0, min(5.0,
+                                                   individual[2][i][1] + random.gauss(0, noise_delay)))
+
+                    individual[2][i] = (new_father_t, new_smoke_delay)
 
             return individual
 
@@ -302,10 +318,14 @@ class Global_System_Q123:
 
             while len(new_population) < population_size:
                 if sum(fitnesses) > 0:
-                    parent1 = random.choices(
-                        population, weights=fitnesses, k=1)[0]
-                    parent2 = random.choices(
-                        population, weights=fitnesses, k=1)[0]
+                    tournament_size = 3
+                    tournament1 = random.choices(
+                        list(zip(population, fitnesses)), k=tournament_size)
+                    parent1 = max(tournament1, key=lambda x: x[1])[0]
+
+                    tournament2 = random.choices(
+                        list(zip(population, fitnesses)), k=tournament_size)
+                    parent2 = max(tournament2, key=lambda x: x[1])[0]
                 else:
                     parent1 = random.choice(population)
                     parent2 = random.choice(population)

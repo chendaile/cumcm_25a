@@ -15,7 +15,7 @@ def optimize_Q2():
     print("Optimizing single missile with single drone and multiple jammers")
 
     best_params = global_sys.optimize_single_missile_drone_all_jammers(
-        drone_id='FY1', n_jammers=1, population_size=30, generations=100, plot_convergence=True)
+        drone_id='FY1', n_jammers=1, population_size=150, generations=50, plot_convergence=True)
 
     if best_params:
         print(f"\nOptimization completed!")
