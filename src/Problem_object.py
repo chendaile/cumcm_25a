@@ -229,13 +229,17 @@ class Global_System_Q123:
 
     def get_cover_seconds_all_jammers(self):
         covered_times = []
-        test_times = np.arange(5.1, 25, 0.05)
+        test_times = np.arange(5.1, 25, 0.01)
         for t in test_times:
             result = self.detect_occlusion_all_jammers(
                 t, self.Missiles['M1'], self.jammers['FY1'])
             if result:
                 covered_times.append(t)
-        return test_times[-1] - test_times[0]
+        # print(covered_times)
+        if not covered_times:
+            return 0.0
+        # total_duration = len(covered_times) * 0.01
+        return covered_times[-1] - covered_times[0]
 
     def update_drone_velocity(self, drone_id, velocity_vector):
         self.Drones[drone_id].forward_vector = np.array(velocity_vector)
@@ -248,19 +252,14 @@ class Global_System_Q123:
     def reset_jammers(self, drone_id):
         self.jammers[drone_id] = []
 
-    def optimize_single_missile_drone_all_jammers(self, drone_id='FY1', n_jammers=3):
+    def optimize_single_missile_drone_all_jammers(self, drone_id='FY1', n_jammers=1, population_size=50, generations=100, plot_convergence=False):
         import random
-
-        best_duration = 0
-        best_params = None
-
-        for iteration in range(100):
-            self.reset_jammers(drone_id)
-
+        import matplotlib.pyplot as plt
+        
+        def create_individual():
             velocity_x = random.uniform(-140, 140)
             velocity_y = random.uniform(-140, 140)
             velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
-
             if velocity_magnitude < 70:
                 scale = 70 / velocity_magnitude
                 velocity_x *= scale
@@ -269,30 +268,128 @@ class Global_System_Q123:
                 scale = 140 / velocity_magnitude
                 velocity_x *= scale
                 velocity_y *= scale
-
-            self.update_drone_velocity(drone_id, [velocity_x, velocity_y, 0])
-
-            jammer_params = []
-            for i in range(n_jammers):
+            
+            jammers = []
+            for _ in range(n_jammers):
                 father_t = random.uniform(0.5, 3.0)
                 smoke_delay = random.uniform(2.0, 5.0)
-                jammer_params.append((father_t, smoke_delay))
+                jammers.append((father_t, smoke_delay))
+            
+            return [velocity_x, velocity_y, jammers]
+        
+        def evaluate_individual(individual):
+            self.reset_jammers(drone_id)
+            self.update_drone_velocity(drone_id, [individual[0], individual[1], 0])
+            
+            for father_t, smoke_delay in individual[2]:
                 self.add_jammers(1, father_t, smoke_delay)
-
-            try:
-                duration = self.get_cover_seconds_single_missile_drone_all_jammers()
-
-                if duration > best_duration:
-                    best_duration = duration
-                    best_params = {
-                        'velocity': [velocity_x, velocity_y, 0],
-                        'jammers': jammer_params,
-                        'duration': duration
-                    }
-                    print(
-                        f"New best: {duration:.2f}s, velocity: [{velocity_x:.1f}, {velocity_y:.1f}], jammers: {jammer_params}")
-
-            except Exception as e:
-                continue
-
-        return best_params
+            
+            return self.get_cover_seconds_all_jammers()
+        
+        def crossover(parent1, parent2):
+            child = []
+            child.append((parent1[0] + parent2[0]) / 2 + random.gauss(0, 10))
+            child.append((parent1[1] + parent2[1]) / 2 + random.gauss(0, 10))
+            
+            velocity_magnitude = np.sqrt(child[0]**2 + child[1]**2)
+            if velocity_magnitude < 70:
+                scale = 70 / velocity_magnitude
+                child[0] *= scale
+                child[1] *= scale
+            elif velocity_magnitude > 140:
+                scale = 140 / velocity_magnitude
+                child[0] *= scale
+                child[1] *= scale
+            
+            child_jammers = []
+            for i in range(len(parent1[2])):
+                if random.random() < 0.5:
+                    child_jammers.append(parent1[2][i])
+                else:
+                    child_jammers.append(parent2[2][i])
+            child.append(child_jammers)
+            
+            return child
+        
+        def mutate(individual):
+            if random.random() < 0.2:
+                individual[0] += random.gauss(0, 20)
+                individual[1] += random.gauss(0, 20)
+                
+                velocity_magnitude = np.sqrt(individual[0]**2 + individual[1]**2)
+                if velocity_magnitude < 70:
+                    scale = 70 / velocity_magnitude
+                    individual[0] *= scale
+                    individual[1] *= scale
+                elif velocity_magnitude > 140:
+                    scale = 140 / velocity_magnitude
+                    individual[0] *= scale
+                    individual[1] *= scale
+            
+            for i in range(len(individual[2])):
+                if random.random() < 0.1:
+                    individual[2][i] = (
+                        max(0.5, min(3.0, individual[2][i][0] + random.gauss(0, 0.3))),
+                        max(2.0, min(5.0, individual[2][i][1] + random.gauss(0, 0.3)))
+                    )
+            
+            return individual
+        
+        population = [create_individual() for _ in range(population_size)]
+        best_fitness_history = []
+        avg_fitness_history = []
+        best_individual = None
+        best_fitness = 0
+        
+        for generation in range(generations):
+            fitnesses = []
+            for individual in population:
+                fitness = evaluate_individual(individual)
+                fitnesses.append(fitness)
+                
+                if fitness > best_fitness:
+                    best_fitness = fitness
+                    best_individual = individual.copy()
+                    print(f"Generation {generation+1}: New best {fitness:.3f}s")
+            
+            best_fitness_history.append(best_fitness)
+            avg_fitness_history.append(np.mean(fitnesses))
+            
+            population_with_fitness = list(zip(population, fitnesses))
+            population_with_fitness.sort(key=lambda x: x[1], reverse=True)
+            
+            new_population = []
+            elite_size = population_size // 4
+            for i in range(elite_size):
+                new_population.append(population_with_fitness[i][0])
+            
+            while len(new_population) < population_size:
+                parent1 = random.choices(population, weights=fitnesses, k=1)[0]
+                parent2 = random.choices(population, weights=fitnesses, k=1)[0]
+                child = crossover(parent1, parent2)
+                child = mutate(child)
+                new_population.append(child)
+            
+            population = new_population
+        
+        if plot_convergence:
+            plt.figure(figsize=(10, 6))
+            plt.plot(range(1, generations+1), best_fitness_history, 'r-', linewidth=2, label='Best Fitness')
+            plt.plot(range(1, generations+1), avg_fitness_history, 'b--', alpha=0.7, label='Average Fitness')
+            plt.xlabel('Generation')
+            plt.ylabel('Coverage Duration (s)')
+            plt.title('Genetic Algorithm Optimization Convergence')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig('output/genetic_algorithm_convergence.png', dpi=150, bbox_inches='tight')
+            plt.show()
+        
+        if best_individual:
+            return {
+                'velocity': [best_individual[0], best_individual[1], 0],
+                'jammers': best_individual[2],
+                'duration': best_fitness
+            }
+        
+        return None
