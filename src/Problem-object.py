@@ -92,11 +92,43 @@ class Global_System:
             np.array(initial_positions['drones'][f'FY{str(i)}']),
             np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1, 2, 3, 4, 5]}
         self.Missiles = {f'M{str(i)}': Missile(
-            np.array(initial_positions['drones'][f'M{str(i)}'])) for i in [1, 2, 3]}
-        self.true_goal = True_goal(np.array(initial_positions['true_goal']))
+            np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1, 2, 3]}
+        self.true_goal = True_goal(
+            np.array(initial_positions['target']['true_target']))
 
     def detect_occlusion_Q1(self, global_t, missile, jammer):
-        pass
+        try:
+            missile_pos = missile.get_pos(global_t)
+
+            if global_t < jammer.smoke.father_t:
+                return False
+
+            smoke_operate_t = global_t - jammer.smoke.father_t
+            if smoke_operate_t > jammer.smoke.smoke_duration:
+                return False
+
+            smoke_pos = jammer.smoke.get_pos(global_t)
+
+            target_bottom = self.true_goal.bottom_center_pos
+            target_top = target_bottom + \
+                np.array([0, 0, self.true_goal.height])
+            target_center = (target_bottom + target_top) / 2
+
+            occlusion_points = [
+                target_bottom,
+                target_center,
+                target_top
+            ]
+
+            occluded_count = 0
+            for point in occlusion_points:
+                if check_occlusion(missile_pos, point, smoke_pos, jammer.smoke.radius):
+                    occluded_count += 1
+
+            return occluded_count >= 2
+
+        except ValueError:
+            return False
 
 
 def main_Q1():
@@ -109,4 +141,5 @@ def main_Q1():
     M1 = global_sys.Missiles['M1']
     FY1 = global_sys.Drones['FY1']
     jammer1 = FY1.create_jammer(1.5, 3.6)
-    global_sys.detect_occlusion(5, M1, jammer1)  # 比如检测第5秒
+    result = global_sys.detect_occlusion_Q1(5, M1, jammer1)
+    print(f"At t=5s, occlusion detected: {result}")
