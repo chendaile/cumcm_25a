@@ -86,6 +86,8 @@ class Drone:
 
 
 class Global_System_Q123:
+    """Single messile and single drone"""
+
     def __init__(self, initial_positions: dict, drones_forward_vector: dict):
         self.Drones = {f'FY{str(i)}': Drone(
             np.array(initial_positions['drones'][f'FY{str(i)}']),
@@ -116,7 +118,7 @@ class Global_System_Q123:
         distance = np.linalg.norm(smoke_pos - proj_point)
         return distance <= smoke_radius
 
-    def detect_occlusion_single_missile_jammer(self, global_t, missile, jammer):
+    def detect_occlusion_single_jammer(self, global_t, missile, jammer):
         missile_pos = missile.get_pos(global_t)
         if global_t < jammer.smoke.father_t:
             return False
@@ -152,7 +154,13 @@ class Global_System_Q123:
                 return False
         return True
 
-    def virtualize_single_missile_jammer(self, global_t, missile, drone, jammer):
+    def detect_occlusion_all_jammers(self, global_t, missile, jammers_list):
+        for jammer in jammers_list:
+            if self.detect_occlusion_single_jammer(global_t, missile, jammer):
+                return True
+        return False
+
+    def virtualize_single_jammer(self, global_t, missile, drone, jammer):
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(111, projection='3d')
 
@@ -219,17 +227,72 @@ class Global_System_Q123:
         #     f'output/visualization_t{global_t:.2f}.png', dpi=800, bbox_inches='tight')
         plt.show()
 
-    def get_cover_seconds_single_missile_drone_all_jammers(self):
+    def get_cover_seconds_all_jammers(self):
         covered_times = []
-        test_times = np.arange(5.1, 18, 0.02)
+        test_times = np.arange(5.1, 25, 0.05)
         for t in test_times:
-            result = self.detect_occlusion_single_missile_jammer(
-                t, self.Missiles['M1'], self.jammers['FY1'][0])
-            print(f"t={t:.2f}s: occlusion detected = {result}")
+            result = self.detect_occlusion_all_jammers(
+                t, self.Missiles['M1'], self.jammers['FY1'])
             if result:
                 covered_times.append(t)
         return test_times[-1] - test_times[0]
 
-    def optimize_single_missile_drone_all_jammers(self, single_drone):
-        # 优化参数是 每个jammer的father_t,smoke_release_delay以及单个single_drone的行走速度[vx,vy,0]
-        pass
+    def update_drone_velocity(self, drone_id, velocity_vector):
+        self.Drones[drone_id].forward_vector = np.array(velocity_vector)
+        velocity_scalar = np.linalg.norm(velocity_vector)
+        self.Drones[drone_id].velocity_scalar = velocity_scalar
+        if velocity_scalar < 70 or velocity_scalar > 140:
+            return False
+        return True
+
+    def reset_jammers(self, drone_id):
+        self.jammers[drone_id] = []
+
+    def optimize_single_missile_drone_all_jammers(self, drone_id='FY1', n_jammers=3):
+        import random
+
+        best_duration = 0
+        best_params = None
+
+        for iteration in range(100):
+            self.reset_jammers(drone_id)
+
+            velocity_x = random.uniform(-140, 140)
+            velocity_y = random.uniform(-140, 140)
+            velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
+
+            if velocity_magnitude < 70:
+                scale = 70 / velocity_magnitude
+                velocity_x *= scale
+                velocity_y *= scale
+            elif velocity_magnitude > 140:
+                scale = 140 / velocity_magnitude
+                velocity_x *= scale
+                velocity_y *= scale
+
+            self.update_drone_velocity(drone_id, [velocity_x, velocity_y, 0])
+
+            jammer_params = []
+            for i in range(n_jammers):
+                father_t = random.uniform(0.5, 3.0)
+                smoke_delay = random.uniform(2.0, 5.0)
+                jammer_params.append((father_t, smoke_delay))
+                self.add_jammers(1, father_t, smoke_delay)
+
+            try:
+                duration = self.get_cover_seconds_single_missile_drone_all_jammers()
+
+                if duration > best_duration:
+                    best_duration = duration
+                    best_params = {
+                        'velocity': [velocity_x, velocity_y, 0],
+                        'jammers': jammer_params,
+                        'duration': duration
+                    }
+                    print(
+                        f"New best: {duration:.2f}s, velocity: [{velocity_x:.1f}, {velocity_y:.1f}], jammers: {jammer_params}")
+
+            except Exception as e:
+                continue
+
+        return best_params
