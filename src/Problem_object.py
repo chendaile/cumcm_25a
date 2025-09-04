@@ -31,7 +31,7 @@ class Jammer():
         self.father_t = father_t
         self.forward_vector = forward_vector
         self.release_point = release_point
-        self.Gravity = np.array([0, 0, -10])
+        self.Gravity = np.array([0, 0, -9.8])
 
         self.smoke_release_delay = smoke_release_delay
         self.smoke = Smoke(self.father_t + self.smoke_release_delay,

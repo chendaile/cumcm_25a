@@ -22,17 +22,26 @@ def detect_occlusion_Q1(global_t, missile, jammer, true_goal):
     target_center = (target_bottom + target_top) / 2
 
     occlusion_points = [
-        target_bottom,
-        target_center,
-        target_top
+        target_bottom + np.array([true_goal.radius, 0, 0]),
+        target_bottom + np.array([0, true_goal.radius, 0]),
+        target_bottom + np.array([-true_goal.radius, 0, 0]),
+        target_bottom + np.array([0, -true_goal.radius, 0]),
+        target_bottom + np.array([true_goal.radius, 0, true_goal.height/2]),
+        target_bottom + np.array([0, true_goal.radius, true_goal.height/2]),
+        target_bottom + np.array([-true_goal.radius, 0, true_goal.height/2]),
+        target_bottom + np.array([0, -true_goal.radius, true_goal.height/2]),
+        target_top + np.array([true_goal.radius, 0, 0]),
+        target_top + np.array([0, true_goal.radius, 0]),
+        target_top + np.array([-true_goal.radius, 0, 0]),
+        target_top + np.array([0, -true_goal.radius, 0])
     ]
 
     occluded_count = 0
     for point in occlusion_points:
-        if check_occlusion(missile_pos, point, smoke_pos, jammer.smoke.radius):
-            occluded_count += 1
+        if not check_occlusion(missile_pos, point, smoke_pos, jammer.smoke.radius):
+            return False
 
-    return occluded_count >= 2
+    return True
 
 
 def virtualize_Q1(global_t, M1, FY1, jammer1, true_goal):
@@ -45,9 +54,9 @@ def virtualize_Q1(global_t, M1, FY1, jammer1, true_goal):
     ax.scatter(*missile_pos, color='red', s=100, label='M1 Missile')
     ax.scatter(*drone_pos, color='blue', s=100, label='FY1 Drone')
 
-    target_pos = true_goal.bottom_center_pos
-    ax.scatter(*target_pos, color='green', s=200,
-               marker='s', label='True Target')
+    # target_pos = true_goal.bottom_center_pos
+    # ax.scatter(*target_pos, color='green', s=200,
+    #            marker='s', label='True Target')
 
     if global_t >= jammer1.smoke.father_t and (global_t - jammer1.smoke.father_t) <= jammer1.smoke.smoke_duration:
         smoke_pos = jammer1.smoke.get_pos(global_t)
@@ -84,7 +93,7 @@ def virtualize_Q1(global_t, M1, FY1, jammer1, true_goal):
             cos_alpha = np.sqrt(1 - sin_alpha**2)
 
             cone_points = []
-            cone_theta = np.linspace(0, 2*np.pi, 36)
+            cone_theta = np.linspace(0, 2*np.pi, 100)
             for theta_val in cone_theta:
                 tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
                     (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
@@ -92,6 +101,23 @@ def virtualize_Q1(global_t, M1, FY1, jammer1, true_goal):
                 cone_points.append(cone_end)
                 ax.plot([missile_pos[0], cone_end[0]], [missile_pos[1], cone_end[1]], [
                         missile_pos[2], cone_end[2]], 'r-', alpha=0.2)
+
+    target_pos = true_goal.bottom_center_pos
+    target_top = target_pos + np.array([0, 0, true_goal.height])
+
+    theta = np.linspace(0, 2*np.pi, 30)
+    r = true_goal.radius
+    x_cyl = r * np.cos(theta) + target_pos[0]
+    y_cyl = r * np.sin(theta) + target_pos[1]
+    z_bottom = np.full_like(x_cyl, target_pos[2])
+    z_top = np.full_like(x_cyl, target_top[2])
+
+    ax.plot(x_cyl, y_cyl, z_bottom, 'g-',
+            linewidth=4, label='Target Base Detail')
+    ax.plot(x_cyl, y_cyl, z_top, 'g-', linewidth=4, label='Target Top Detail')
+    for i in range(0, len(x_cyl), 3):
+        ax.plot([x_cyl[i], x_cyl[i]], [y_cyl[i], y_cyl[i]],
+                [z_bottom[i], z_top[i]], 'g-', linewidth=3, alpha=0.8)
 
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
@@ -125,7 +151,7 @@ def find_cover_seconds_Q1():
         print(f"t={t:.2f}s: occlusion detected = {result}")
         if result:
             covered_times.append(t)
-            virtualize_Q1(t, M1, FY1, jammer1, true_goal)
+        # virtualize_Q1(t, M1, FY1, jammer1, true_goal)
 
     print(f"\nCovered time periods: {covered_times}")
 
@@ -145,14 +171,11 @@ def test_Q1():
     print(f"Jammer released at t={jammer1.father_t}s")
     print(f"Smoke activated at t={jammer1.smoke.father_t}s")
 
-    result = detect_occlusion_Q1(8.5, M1, jammer1, true_goal)
+    result = detect_occlusion_Q1(7.9, M1, jammer1, true_goal)
     print(f"occlusion detected: {result}")
-    virtualize_Q1(8.5, M1, FY1, jammer1, true_goal)
-
-    result = detect_occlusion_Q1(9, M1, jammer1, true_goal)
-    print(f"occlusion detected: {result}")
-    virtualize_Q1(9, M1, FY1, jammer1, true_goal)
+    virtualize_Q1(7.9, M1, FY1, jammer1, true_goal)
 
 
 if __name__ == '__main__':
     find_cover_seconds_Q1()
+    # test_Q1()
