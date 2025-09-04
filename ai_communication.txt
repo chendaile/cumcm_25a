@@ -106,3 +106,6 @@
 问题: 把最后优化结果的遮挡的时间区间也显示出来
 回答: 已添加get_cover_intervals_all_jammers方法计算遮挡时间区间。优化结果：最佳遮挡2.25秒，无人机速度[69.9, 4.3, 0]，干扰弹参数release_t=0.00s/smoke_delay=0.08s，遮挡区间5.10s-7.35s。
 ---
+问题: 更新一下src/Virtualizer.py,因为里面的函数只可以画一个jammer,我希望你改进为all jammers
+回答: 已更新Virtualizer.py：1.保留virtualize_single_jammer函数向后兼容；2.新增virtualize_all_jammers函数支持多个干扰弹可视化；3.不同烟雾使用不同颜色区分；4.显示活动烟雾数量。测试3个干扰弹优化结果2.95秒。
+---

@@ -29,8 +29,8 @@ class GeneticOptimizer:
 
         jammers = []
         for _ in range(self.n_jammers):
-            father_t = random.uniform(0.0, 10.0)
-            smoke_delay = random.uniform(0.0, 10.0)
+            father_t = random.uniform(0.0, 5)
+            smoke_delay = random.uniform(0.0, 5)
             jammers.append((father_t, smoke_delay))
 
         return [velocity_x, velocity_y, jammers]
