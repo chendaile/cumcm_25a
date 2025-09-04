@@ -219,6 +219,17 @@ class Global_System_Q123:
         #     f'output/visualization_t{global_t:.2f}.png', dpi=800, bbox_inches='tight')
         plt.show()
 
+    def get_cover_seconds_single_missile_drone_all_jammers(self):
+        covered_times = []
+        test_times = np.arange(5.1, 18, 0.02)
+        for t in test_times:
+            result = self.detect_occlusion_single_missile_jammer(
+                t, self.Missiles['M1'], self.jammers['FY1'][0])
+            print(f"t={t:.2f}s: occlusion detected = {result}")
+            if result:
+                covered_times.append(t)
+        return test_times[-1] - test_times[0]
+
     def optimize_single_missile_drone_all_jammers(self, single_drone):
-        # 优化参数是 每个jammer的father_t,smoke_release_delay以及单个single_drone的行走速度vx,vy
+        # 优化参数是 每个jammer的father_t,smoke_release_delay以及单个single_drone的行走速度[vx,vy,0]
         pass
