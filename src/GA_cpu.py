@@ -3,8 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import json
-from numba import njit, types
-from numba.typed import Dict, List
+from numba import njit
 
 
 @njit
@@ -99,6 +98,7 @@ class GeneticOptimizer:
         self.stagnation_counter = 0
         self.stagnation_threshold = max(20, generations // 15)
         self.mutation_intensity = 1.0
+        print("使用CPU计算版本")
 
     def create_individual(self):
         with open('data-bin/ga_initial_params.json', 'r', encoding='utf-8') as f:
@@ -235,15 +235,19 @@ class GeneticOptimizer:
         return new_population
 
     def calculate_diversity(self, population):
+        """计算种群多样性，使用CPU加速版本"""
         if len(population) < 2:
             return 0.0
+
         n_pop = len(population)
         n_drones = len(self.drone_ids)
         velocities = np.zeros((n_pop, n_drones, 2), dtype=np.float64)
+
         for i, individual in enumerate(population):
             for j, drone_id in enumerate(self.drone_ids):
                 velocities[i, j, 0] = individual[drone_id][0]
                 velocities[i, j, 1] = individual[drone_id][1]
+
         return calculate_diversity_fast(velocities, n_drones, n_pop)
 
     def optimize(self, plot_convergence=False):

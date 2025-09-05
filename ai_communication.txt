@@ -145,3 +145,6 @@
 问题: save_result_to_file函数中加入遮挡的具体时间interval
 回答: 已在save_result_to_file函数中添加遮挡时间间隔信息：1.重新配置系统获取cover_intervals；2.输出每个遮挡区间的开始时间、结束时间和持续时长；3.格式为"区间X: 开始s - 结束s (持续: 时长s)"，便于分析优化结果的具体遮挡效果。
 ---
+问题: 创建GA_cpu.py和GA_gpu.py分别为完全CPU和GPU版本
+回答: 已创建两个版本：1.GA_cpu.py：完全CPU优化版本，使用njit加速核心计算；2.GA_gpu.py：完全GPU版本，包含GPU核函数进行批量交叉、变异和多样性计算，支持GPU并行加速。GPU版本在大种群时性能显著提升。
+---
