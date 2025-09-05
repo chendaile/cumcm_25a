@@ -12,17 +12,18 @@ def optimize_Q23():
     print("Starting optimization ")
 
     best_params = global_sys.optimize_single_missile_drone_all_jammers(
-        drone_id='FY1', n_jammers=3, population_size=150, generations=300, plot_convergence=True)
+        drone_ids=['FY1', 'FY2'], n_jammers=1, population_size=150, generations=10, plot_convergence=True)
 
     if best_params:
         print(f"\nOptimization completed!")
         print(f"Best coverage duration: {best_params['duration']:.2f} seconds")
-        print(
-            f"Optimal velocity: [{best_params['velocity'][0]:.1f}, {best_params['velocity'][1]:.1f}, 0]")
-        print(f"Jammer parameters:")
-        for i, (father_t, smoke_delay) in enumerate(best_params['jammers']):
-            print(
-                f"  Jammer {i+1}: release_t={father_t:.2f}s, smoke_delay={smoke_delay:.2f}s")
+        for drone_id, drone_data in best_params['drones'].items():
+            print(f"{drone_id}:")
+            print(f"  Velocity: [{drone_data[0]:.1f}, {drone_data[1]:.1f}, 0]")
+            print(f"  Jammer parameters:")
+            for i, (father_t, smoke_delay) in enumerate(drone_data[2]):
+                print(
+                    f"    Jammer {i+1}: release_t={father_t:.2f}s, smoke_delay={smoke_delay:.2f}s")
 
         test(global_sys, best_params)
     else:
@@ -30,10 +31,13 @@ def optimize_Q23():
 
 
 def test(global_sys, best_params):
-    global_sys.reset_jammers('FY1')
-    global_sys.update_drone_velocity('FY1', best_params['velocity'])
-    for father_t, smoke_delay in best_params['jammers']:
-        global_sys.add_jammers('FY1', father_t, smoke_delay)
+    for drone_id, drone_data in best_params['drones'].items():
+        global_sys.reset_jammers(drone_id)
+        global_sys.update_drone_velocity(
+            drone_id, [drone_data[0], drone_data[1], 0])
+        for father_t, smoke_delay in drone_data[2]:
+            global_sys.add_jammers(drone_id, father_t, smoke_delay)
+
     final_duration = global_sys.get_cover_seconds_all_jammers()
     cover_intervals = global_sys.get_cover_intervals_all_jammers()
     print(f"\nVerification: {final_duration:.2f} seconds coverage")
@@ -41,9 +45,18 @@ def test(global_sys, best_params):
     for i, (start, end) in enumerate(cover_intervals):
         print(
             f"  Interval {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
+
+    all_jammers = []
+    for drone_id in best_params['drones']:
+        all_jammers.extend(global_sys.jammers[drone_id])
+
+    # 准备所有相关的drone对象
+    active_drones = {
+        drone_id: global_sys.Drones[drone_id] for drone_id in best_params['drones']}
+
     virtualize_all_jammers(
-        8.0, global_sys.Missiles['M1'], global_sys.Drones['FY1'],
-        global_sys.jammers['FY1'], global_sys.true_goal)
+        8.0, global_sys.Missiles['M1'], active_drones,
+        all_jammers, global_sys.true_goal)
 
 
 if __name__ == '__main__':
@@ -53,8 +66,8 @@ if __name__ == '__main__':
     #     drones_forward_vector = json.load(f)
     # global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
     # best_params = {
-    #     'velocity': [-89.249, 0, 0],
-    #     'jammers': [(1.239, 0)]
+    #     'velocity': [-116.099, 1, 0],
+    #     'jammers': [(0.746, 0.27)]
     # }
     # test(global_sys, best_params)
     optimize_Q23()

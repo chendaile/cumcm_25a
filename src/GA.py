@@ -7,9 +7,10 @@ import json
 
 
 class GeneticOptimizer:
-    def __init__(self, global_system, drone_id, n_jammers, population_size, generations):
+    def __init__(self, global_system, drone_ids, n_jammers, population_size, generations):
         self.global_system = global_system
-        self.drone_id = drone_id
+        self.drone_ids = [drone_ids] if isinstance(
+            drone_ids, str) else drone_ids
         self.n_jammers = n_jammers
         self.population_size = population_size
         self.generations = generations
@@ -19,98 +20,116 @@ class GeneticOptimizer:
     def create_individual(self):
         with open('data-bin/ga_initial_params.json', 'r', encoding='utf-8') as f:
             params = json.load(f)
-        velocity_x = params['velocity']['velocity_x']
-        velocity_y = params['velocity']['velocity_y']
-        velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
 
-        if velocity_magnitude < 70:
-            scale = 70 / velocity_magnitude
-            velocity_x *= scale
-            velocity_y *= scale
-        elif velocity_magnitude > 140:
-            scale = 140 / velocity_magnitude
-            velocity_x *= scale
-            velocity_y *= scale
+        individual = {}
+        for drone_id in self.drone_ids:
+            velocity_x = params['velocity']['velocity_x'] + \
+                random.uniform(-10, 10)
+            velocity_y = params['velocity']['velocity_y'] + \
+                random.uniform(-10, 10)
+            velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
 
-        jammers = []
-        for _ in range(self.n_jammers):
-            father_t = params['jammers']['father_t']
-            smoke_delay = params['jammers']['smoke_delay']
-            jammers.append((father_t, smoke_delay))
-        return [velocity_x, velocity_y, jammers]
+            if velocity_magnitude < 70:
+                scale = 70 / velocity_magnitude
+                velocity_x *= scale
+                velocity_y *= scale
+            elif velocity_magnitude > 140:
+                scale = 140 / velocity_magnitude
+                velocity_x *= scale
+                velocity_y *= scale
+
+            jammers = []
+            for _ in range(self.n_jammers):
+                father_t = params['jammers']['father_t'] + \
+                    random.uniform(-0.5, 0.5)
+                smoke_delay = params['jammers']['smoke_delay'] + \
+                    random.uniform(-0.5, 0.5)
+                father_t = max(0.0, father_t)
+                smoke_delay = max(0.0, smoke_delay)
+                jammers.append((father_t, smoke_delay))
+
+            individual[drone_id] = [velocity_x, velocity_y, jammers]
+
+        return individual
 
     def evaluate_individual(self, individual):
-        self.global_system.reset_jammers(self.drone_id)
-        self.global_system.update_drone_velocity(
-            self.drone_id, [individual[0], individual[1], 0])
-
-        for father_t, smoke_delay in individual[2]:
-            self.global_system.add_jammers(
-                self.drone_id, father_t, smoke_delay)
+        for drone_id in self.drone_ids:
+            self.global_system.reset_jammers(drone_id)
+            drone_data = individual[drone_id]
+            self.global_system.update_drone_velocity(
+                drone_id, [drone_data[0], drone_data[1], 0])
+            for father_t, smoke_delay in drone_data[2]:
+                self.global_system.add_jammers(drone_id, father_t, smoke_delay)
         return self.global_system.get_cover_seconds_all_jammers()
 
     def crossover(self, parent1, parent2):
-        import random
-        child = []
-        alpha = random.uniform(0.3, 0.7)
-        child.append(alpha * parent1[0] + (1 - alpha)
-                     * parent2[0] + random.gauss(0, 5))
-        child.append(alpha * parent1[1] + (1 - alpha)
-                     * parent2[1] + random.gauss(0, 5))
-        velocity_magnitude = np.sqrt(child[0]**2 + child[1]**2)
-        if velocity_magnitude < 70:
-            scale = 70 / velocity_magnitude
-            child[0] *= scale
-            child[1] *= scale
-        elif velocity_magnitude > 140:
-            scale = 140 / velocity_magnitude
-            child[0] *= scale
-            child[1] *= scale
+        child = {}
+        for drone_id in self.drone_ids:
+            alpha = random.uniform(0.3, 0.7)
+            child_x = alpha * \
+                parent1[drone_id][0] + (1 - alpha) * \
+                parent2[drone_id][0] + random.gauss(0, 5)
+            child_y = alpha * \
+                parent1[drone_id][1] + (1 - alpha) * \
+                parent2[drone_id][1] + random.gauss(0, 5)
+            velocity_magnitude = np.sqrt(child_x**2 + child_y**2)
+            if velocity_magnitude < 70:
+                scale = 70 / velocity_magnitude
+                child_x *= scale
+                child_y *= scale
+            elif velocity_magnitude > 140:
+                scale = 140 / velocity_magnitude
+                child_x *= scale
+                child_y *= scale
 
-        child_jammers = []
-        for i in range(len(parent1[2])):
-            if random.random() < 0.6:
-                beta = random.uniform(0.2, 0.8)
-                father_t = beta * parent1[2][i][0] + \
-                    (1 - beta) * parent2[2][i][0]
-                smoke_delay = beta * \
-                    parent1[2][i][1] + (1 - beta) * parent2[2][i][1]
-                child_jammers.append((father_t, smoke_delay))
-            else:
-                child_jammers.append(random.choice(
-                    [parent1[2][i], parent2[2][i]]))
-        child.append(child_jammers)
+            child_jammers = []
+            for i in range(len(parent1[drone_id][2])):
+                if random.random() < 0.6:
+                    beta = random.uniform(0.2, 0.8)
+                    father_t = beta * \
+                        parent1[drone_id][2][i][0] + \
+                        (1 - beta) * parent2[drone_id][2][i][0]
+                    smoke_delay = beta * \
+                        parent1[drone_id][2][i][1] + \
+                        (1 - beta) * parent2[drone_id][2][i][1]
+                    child_jammers.append((father_t, smoke_delay))
+                else:
+                    child_jammers.append(random.choice(
+                        [parent1[drone_id][2][i], parent2[drone_id][2][i]]))
+            child[drone_id] = [child_x, child_y, child_jammers]
         return child
 
     def mutate(self, individual, generation):
         mutation_rate = 0.25 if generation < self.generations // 2 else 0.15
 
-        if random.random() < mutation_rate:
-            noise_scale = max(5, 30 - generation * 25 / self.generations)
-            individual[0] += random.gauss(0, noise_scale)
-            individual[1] += random.gauss(0, noise_scale)
-            velocity_magnitude = np.sqrt(individual[0]**2 + individual[1]**2)
-            if velocity_magnitude < 70:
-                scale = 70 / velocity_magnitude
-                individual[0] *= scale
-                individual[1] *= scale
-            elif velocity_magnitude > 140:
-                scale = 140 / velocity_magnitude
-                individual[0] *= scale
-                individual[1] *= scale
+        for drone_id in self.drone_ids:
+            if random.random() < mutation_rate:
+                noise_scale = max(5, 30 - generation * 25 / self.generations)
+                individual[drone_id][0] += random.gauss(0, noise_scale)
+                individual[drone_id][1] += random.gauss(0, noise_scale)
+                velocity_magnitude = np.sqrt(
+                    individual[drone_id][0]**2 + individual[drone_id][1]**2)
+                if velocity_magnitude < 70:
+                    scale = 70 / velocity_magnitude
+                    individual[drone_id][0] *= scale
+                    individual[drone_id][1] *= scale
+                elif velocity_magnitude > 140:
+                    scale = 140 / velocity_magnitude
+                    individual[drone_id][0] *= scale
+                    individual[drone_id][1] *= scale
 
-        for i in range(len(individual[2])):
-            if random.random() < 0.15:
-                noise_t = max(0.1, 0.5 - generation * 0.4 / self.generations)
-                noise_delay = max(0.1, 0.6 - generation *
-                                  0.5 / self.generations)
-
-                new_father_t = max(0.0, min(5.0,
-                                            individual[2][i][0] + random.gauss(0, noise_t)))
-                new_smoke_delay = max(0.0, min(5.0,
-                                               individual[2][i][1] + random.gauss(0, noise_delay)))
-
-                individual[2][i] = (new_father_t, new_smoke_delay)
+            for i in range(len(individual[drone_id][2])):
+                if random.random() < 0.15:
+                    noise_t = max(0.1, 0.5 - generation *
+                                  0.4 / self.generations)
+                    noise_delay = max(0.1, 0.6 - generation *
+                                      0.5 / self.generations)
+                    new_father_t = max(
+                        0.0, min(5.0, individual[drone_id][2][i][0] + random.gauss(0, noise_t)))
+                    new_smoke_delay = max(
+                        0.0, min(5.0, individual[drone_id][2][i][1] + random.gauss(0, noise_delay)))
+                    individual[drone_id][2][i] = (
+                        new_father_t, new_smoke_delay)
         return individual
 
     def tournament_selection(self, population, fitnesses, tournament_size=3):
@@ -169,27 +188,28 @@ class GeneticOptimizer:
 
         if self.best_individual:
             result = {
-                'velocity': [self.best_individual[0], self.best_individual[1], 0],
-                'jammers': self.best_individual[2],
+                'drones': self.best_individual,
                 'duration': self.best_fitness
             }
+
             self.save_result_to_file(result)
             return result
         return None
 
     def save_result_to_file(self, result):
-        if not os.path.exists('output'):
-            os.makedirs('output')
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with open('output/optimization_results.txt', 'a', encoding='utf-8') as f:
             f.write(f"优化结果 - {timestamp}\n")
-            f.write(
-                f"速度: [{result['velocity'][0]:.2f}, {result['velocity'][1]:.2f}, {result['velocity'][2]:.2f}]\n")
             f.write(f"覆盖时长: {result['duration']:.3f}秒\n")
-            f.write(f"干扰弹参数:\n")
-            for i, (father_t, smoke_delay) in enumerate(result['jammers']):
+
+            for drone_id, drone_data in result['drones'].items():
+                f.write(f"{drone_id}:\n")
                 f.write(
-                    f"  干扰弹{i+1}: 发射时间={father_t:.2f}s, 烟雾延迟={smoke_delay:.2f}s\n")
+                    f"  速度: [{drone_data[0]:.2f}, {drone_data[1]:.2f}, 0.00]\n")
+                f.write(f"  干扰弹参数:\n")
+                for i, (father_t, smoke_delay) in enumerate(drone_data[2]):
+                    f.write(
+                        f"    干扰弹{i+1}: 发射时间={father_t:.2f}s, 烟雾延迟={smoke_delay:.2f}s\n")
             f.write("-" * 50 + "\n")
 
         print(f"结果已保存到 output/optimization_results.txt")

@@ -175,8 +175,11 @@ class Global_System_Q123:
         covered_times = []
         test_times = np.arange(5.1, 20, 0.01)
         for t in test_times:
+            all_jammers = []
+            for drone_id in self.jammers:
+                all_jammers.extend(self.jammers[drone_id])
             result = self.detect_occlusion_all_jammers(
-                t, self.Missiles['M1'], self.jammers['FY1'])
+                t, self.Missiles['M1'], all_jammers)
             if result:
                 covered_times.append(t)
 
@@ -204,10 +207,9 @@ class Global_System_Q123:
     def reset_jammers(self, drone_id):
         self.jammers[drone_id] = []
 
-    def optimize_single_missile_drone_all_jammers(self, drone_id, n_jammers,
+    def optimize_single_missile_drone_all_jammers(self, drone_ids, n_jammers,
                                                   population_size,
-                                                  generations,
-                                                  plot_convergence):
+                                                  generations, plot_convergence):
         optimizer = GeneticOptimizer(
-            self, drone_id, n_jammers, population_size, generations)
+            self, drone_ids, n_jammers, population_size, generations)
         return optimizer.optimize(plot_convergence)

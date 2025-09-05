@@ -8,18 +8,25 @@ def virtualize_single_jammer(global_t, missile, drone, jammer, true_goal):
     virtualize_all_jammers(global_t, missile, drone, jammers, true_goal)
 
 
-def virtualize_all_jammers(global_t, missile, drone, jammers, true_goal):
+def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal):
     """可视化所有干扰弹的函数"""
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
 
     missile_pos = missile.get_pos(global_t)
-    drone_pos = drone.get_pos(global_t)
     target_pos = true_goal.bottom_center_pos
 
     ax.scatter(*missile_pos, color='darkred', s=60, label='M1 Missile')
-    ax.scatter(*drone_pos, color='blue', s=60, label='FY1 Drone')
     ax.scatter(*target_pos, color='green', s=50, label='True Target')
+    
+    # 支持单个drone或多个drones
+    if hasattr(drones, 'get_pos'):  # 单个drone对象
+        drone_pos = drones.get_pos(global_t)
+        ax.scatter(*drone_pos, color='darkred', s=60, label='Drone')
+    else:  # 多个drone的字典
+        for i, (drone_id, drone) in enumerate(drones.items()):
+            drone_pos = drone.get_pos(global_t)
+            ax.scatter(*drone_pos, color='darkred', s=60, label=f'{drone_id}' if i == 0 else "")
 
     colors = ['orange', 'yellow', 'cyan', 'magenta', 'lime']
     active_smoke_count = 0
