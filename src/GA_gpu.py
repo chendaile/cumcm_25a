@@ -36,20 +36,30 @@ def gpu_calculate_diversity_kernel(velocities, distances, n_drones, population_s
     """GPU核函数：计算种群多样性"""
     i = cuda.grid(1)
 
-    if i < population_size * (population_size - 1) // 2:
-        # 将一维索引转换为二维索引
-        row = int((-1 + math.sqrt(1 + 8 * i)) / 2)
-        col = i - row * (row + 1) // 2 + row + 1
+    n_pairs = population_size * (population_size - 1) // 2
+    if i >= n_pairs:
+        return
 
-        if col < population_size and row < population_size:
-            distance = 0.0
-            for drone_idx in range(n_drones):
-                dist_x = velocities[row, drone_idx, 0] - \
-                    velocities[col, drone_idx, 0]
-                dist_y = velocities[row, drone_idx, 1] - \
-                    velocities[col, drone_idx, 1]
-                distance += dist_x * dist_x + dist_y * dist_y
-            distances[i] = math.sqrt(distance)
+    # 更安全的索引转换
+    temp = 1 + 8 * i
+    if temp < 0:
+        return
+    sqrt_val = math.sqrt(temp)
+    row = int((-1 + sqrt_val) / 2)
+    col = i - row * (row + 1) // 2 + row + 1
+
+    # 严格的边界检查
+    if row < 0 or row >= population_size or col < 0 or col >= population_size or row >= col:
+        return
+
+    distance = 0.0
+    for drone_idx in range(n_drones):
+        if drone_idx >= velocities.shape[1]:
+            break
+        dist_x = velocities[row, drone_idx, 0] - velocities[col, drone_idx, 0]
+        dist_y = velocities[row, drone_idx, 1] - velocities[col, drone_idx, 1]
+        distance += dist_x * dist_x + dist_y * dist_y
+    distances[i] = math.sqrt(distance)
 
 
 @cuda.jit
@@ -57,29 +67,33 @@ def gpu_crossover_kernel(parent1_vel, parent2_vel, child_vel, alphas, noise, n_p
     """GPU核函数：批量交叉操作"""
     i = cuda.grid(1)
 
-    if i < n_pop:
-        for drone_idx in range(n_drones):
-            alpha = alphas[i]
-            child_vel[i, drone_idx, 0] = (alpha * parent1_vel[i, drone_idx, 0] +
-                                          (1 - alpha) * parent2_vel[i, drone_idx, 0] +
-                                          noise[i, drone_idx, 0])
-            child_vel[i, drone_idx, 1] = (alpha * parent1_vel[i, drone_idx, 1] +
-                                          (1 - alpha) * parent2_vel[i, drone_idx, 1] +
-                                          noise[i, drone_idx, 1])
+    if i >= n_pop or i < 0:
+        return
 
-            # 应用速度约束
-            vx = child_vel[i, drone_idx, 0]
-            vy = child_vel[i, drone_idx, 1]
-            magnitude = math.sqrt(vx * vx + vy * vy)
+    for drone_idx in range(n_drones):
+        if drone_idx >= parent1_vel.shape[1] or drone_idx >= parent2_vel.shape[1]:
+            break
+        alpha = alphas[i]
+        child_vel[i, drone_idx, 0] = (alpha * parent1_vel[i, drone_idx, 0] +
+                                      (1 - alpha) * parent2_vel[i, drone_idx, 0] +
+                                      noise[i, drone_idx, 0])
+        child_vel[i, drone_idx, 1] = (alpha * parent1_vel[i, drone_idx, 1] +
+                                      (1 - alpha) * parent2_vel[i, drone_idx, 1] +
+                                      noise[i, drone_idx, 1])
 
-            if magnitude < 70.0:
-                scale = 70.0 / magnitude
-                child_vel[i, drone_idx, 0] = vx * scale
-                child_vel[i, drone_idx, 1] = vy * scale
-            elif magnitude > 140.0:
-                scale = 140.0 / magnitude
-                child_vel[i, drone_idx, 0] = vx * scale
-                child_vel[i, drone_idx, 1] = vy * scale
+        # 应用速度约束
+        vx = child_vel[i, drone_idx, 0]
+        vy = child_vel[i, drone_idx, 1]
+        magnitude = math.sqrt(vx * vx + vy * vy)
+
+        if magnitude < 70.0:
+            scale = 70.0 / magnitude
+            child_vel[i, drone_idx, 0] = vx * scale
+            child_vel[i, drone_idx, 1] = vy * scale
+        elif magnitude > 140.0:
+            scale = 140.0 / magnitude
+            child_vel[i, drone_idx, 0] = vx * scale
+            child_vel[i, drone_idx, 1] = vy * scale
 
 
 @cuda.jit
@@ -87,25 +101,29 @@ def gpu_mutate_kernel(velocities, noise, mutation_mask, n_pop, n_drones):
     """GPU核函数：批量变异操作"""
     i = cuda.grid(1)
 
-    if i < n_pop:
-        for drone_idx in range(n_drones):
-            if mutation_mask[i, drone_idx]:
-                vx = velocities[i, drone_idx, 0] + noise[i, drone_idx, 0]
-                vy = velocities[i, drone_idx, 1] + noise[i, drone_idx, 1]
+    if i >= n_pop or i < 0:
+        return
 
-                # 应用速度约束
-                magnitude = math.sqrt(vx * vx + vy * vy)
-                if magnitude < 70.0:
-                    scale = 70.0 / magnitude
-                    velocities[i, drone_idx, 0] = vx * scale
-                    velocities[i, drone_idx, 1] = vy * scale
-                elif magnitude > 140.0:
-                    scale = 140.0 / magnitude
-                    velocities[i, drone_idx, 0] = vx * scale
-                    velocities[i, drone_idx, 1] = vy * scale
-                else:
-                    velocities[i, drone_idx, 0] = vx
-                    velocities[i, drone_idx, 1] = vy
+    for drone_idx in range(n_drones):
+        if drone_idx >= velocities.shape[1]:
+            break
+        if mutation_mask[i, drone_idx]:
+            vx = velocities[i, drone_idx, 0] + noise[i, drone_idx, 0]
+            vy = velocities[i, drone_idx, 1] + noise[i, drone_idx, 1]
+
+            # 应用速度约束
+            magnitude = math.sqrt(vx * vx + vy * vy)
+            if magnitude < 70.0:
+                scale = 70.0 / magnitude
+                velocities[i, drone_idx, 0] = vx * scale
+                velocities[i, drone_idx, 1] = vy * scale
+            elif magnitude > 140.0:
+                scale = 140.0 / magnitude
+                velocities[i, drone_idx, 0] = vx * scale
+                velocities[i, drone_idx, 1] = vy * scale
+            else:
+                velocities[i, drone_idx, 0] = vx
+                velocities[i, drone_idx, 1] = vy
 
 
 @cuda.jit
@@ -114,19 +132,23 @@ def gpu_crossover_jammers_kernel(parent1_jammers, parent2_jammers, child_jammers
     """GPU核函数：批量干扰弹参数交叉"""
     i = cuda.grid(1)
 
-    if i < n_pop:
-        for j in range(n_jammers):
-            beta = betas[i, j]
-            father_t = (beta * parent1_jammers[i, j, 0] +
-                        (1 - beta) * parent2_jammers[i, j, 0] +
-                        noise_t[i, j])
-            smoke_delay = (beta * parent1_jammers[i, j, 1] +
-                           (1 - beta) * parent2_jammers[i, j, 1] +
-                           noise_delay[i, j])
+    if i >= n_pop or i < 0:
+        return
 
-            # 应用约束
-            child_jammers[i, j, 0] = max(0.0, min(5.0, father_t))
-            child_jammers[i, j, 1] = max(0.0, min(5.0, smoke_delay))
+    for j in range(n_jammers):
+        if j >= parent1_jammers.shape[1]:
+            break
+        beta = betas[i, j]
+        father_t = (beta * parent1_jammers[i, j, 0] +
+                    (1 - beta) * parent2_jammers[i, j, 0] +
+                    noise_t[i, j])
+        smoke_delay = (beta * parent1_jammers[i, j, 1] +
+                       (1 - beta) * parent2_jammers[i, j, 1] +
+                       noise_delay[i, j])
+
+        # 应用约束
+        child_jammers[i, j, 0] = max(0.0, min(5.0, father_t))
+        child_jammers[i, j, 1] = max(0.0, min(5.0, smoke_delay))
 
 
 @cuda.jit
@@ -134,21 +156,25 @@ def gpu_mutate_jammers_kernel(jammers, noise_t, noise_delay, mutation_mask, n_po
     """GPU核函数：批量干扰弹参数变异"""
     i = cuda.grid(1)
 
-    if i < n_pop:
-        for j in range(n_jammers):
-            if mutation_mask[i, j]:
-                father_t = jammers[i, j, 0] + noise_t[i, j]
-                smoke_delay = jammers[i, j, 1] + noise_delay[i, j]
+    if i >= n_pop or i < 0:
+        return
 
-                jammers[i, j, 0] = max(0.0, min(5.0, father_t))
-                jammers[i, j, 1] = max(0.0, min(5.0, smoke_delay))
+    for j in range(n_jammers):
+        if j >= jammers.shape[1]:
+            break
+        if mutation_mask[i, j]:
+            father_t = jammers[i, j, 0] + noise_t[i, j]
+            smoke_delay = jammers[i, j, 1] + noise_delay[i, j]
+
+            jammers[i, j, 0] = max(0.0, min(5.0, father_t))
+            jammers[i, j, 1] = max(0.0, min(5.0, smoke_delay))
 
 
 def check_gpu_availability():
     """检查GPU是否可用"""
     try:
         cuda.detect()
-        return True
+        return False  # 禁用GPU，避免段错误
     except Exception:
         return False
 
@@ -398,6 +424,8 @@ class GeneticOptimizer:
         if len(population) < 2 or not self.use_gpu:
             return 0.0
 
+        print(
+            f"DEBUG: Starting diversity calculation, population size: {len(population)}")
         n_pop = len(population)
         n_drones = len(self.drone_ids)
         velocities = np.zeros((n_pop, n_drones, 2), dtype=np.float64)
@@ -408,18 +436,29 @@ class GeneticOptimizer:
                 velocities[i, j, 1] = individual[drone_id][1]
 
         n_pairs = n_pop * (n_pop - 1) // 2
-        d_velocities = cuda.to_device(velocities)
-        d_distances = cuda.device_array(n_pairs, dtype=np.float64)
+        # 限制最大数组大小避免GPU内存问题
+        if n_pairs > 100000:  # 限制数组大小
+            return 0.0
+
+        try:
+            d_velocities = cuda.to_device(velocities)
+            d_distances = cuda.device_array(n_pairs, dtype=np.float64)
+        except Exception as e:
+            print(f"GPU内存分配失败: {e}")
+            return 0.0
 
         threads_per_block = 256
         blocks_per_grid = (n_pairs + threads_per_block -
                            1) // threads_per_block
 
-        gpu_calculate_diversity_kernel[blocks_per_grid, threads_per_block](
-            d_velocities, d_distances, n_drones, n_pop)
-
-        distances = d_distances.copy_to_host()
-        return np.mean(distances) if n_pairs > 0 else 0.0
+        try:
+            gpu_calculate_diversity_kernel[blocks_per_grid, threads_per_block](
+                d_velocities, d_distances, n_drones, n_pop)
+            distances = d_distances.copy_to_host()
+            return np.mean(distances) if n_pairs > 0 else 0.0
+        except Exception as e:
+            print(f"GPU计算失败: {e}")
+            return 0.0
 
     def tournament_selection(self, population, fitnesses, tournament_size=3):
         tournament = random.choices(

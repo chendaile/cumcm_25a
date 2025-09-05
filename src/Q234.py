@@ -29,7 +29,7 @@ def Q4_help1():
     optimize_single_missile(drone_ids=['FY1'],
                             n_jammers=1,
                             population_size=150,
-                            generations=300,
+                            generations=20,
                             Qname='Q4_help1')
 
 
