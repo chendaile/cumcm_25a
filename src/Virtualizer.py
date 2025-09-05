@@ -18,15 +18,11 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal):
 
     ax.scatter(*missile_pos, color='darkred', s=60, label='M1 Missile')
     ax.scatter(*target_pos, color='green', s=50, label='True Target')
-    
-    # 支持单个drone或多个drones
-    if hasattr(drones, 'get_pos'):  # 单个drone对象
-        drone_pos = drones.get_pos(global_t)
-        ax.scatter(*drone_pos, color='darkred', s=60, label='Drone')
-    else:  # 多个drone的字典
-        for i, (drone_id, drone) in enumerate(drones.items()):
-            drone_pos = drone.get_pos(global_t)
-            ax.scatter(*drone_pos, color='darkred', s=60, label=f'{drone_id}' if i == 0 else "")
+
+    for drone_id, drone in drones.items():
+        drone_pos = drone.get_pos(global_t)
+        ax.scatter(*drone_pos, color='b', s=60,
+                   label=f'{drone_id}')
 
     colors = ['orange', 'yellow', 'cyan', 'magenta', 'lime']
     active_smoke_count = 0

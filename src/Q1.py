@@ -1,15 +1,15 @@
 import json
-from Problem_object import Global_System_Q123
+from Problem_object import Global_System
 from Virtualizer import virtualize_single_jammer
 
 
 def find_cover_seconds_Q1():
     with open("data-bin/initial_positions.json") as f:
         initial_positions = json.load(f)
-    with open("data-bin/drones_forward_vector-Q1.json") as f:
+    with open("data-bin/initial_drones_forward_vector-Q1.json") as f:
         drones_forward_vector = json.load(f)
 
-    global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
+    global_sys = Global_System(initial_positions, drones_forward_vector)
     global_sys.add_jammers('FY1', 1.5, 3.6)
 
     duration = global_sys.get_cover_seconds_all_jammers()
@@ -22,7 +22,7 @@ def test_Q1(tmp_time=7.9):
     with open("data-bin/drones_forward_vector-Q1.json") as f:
         drones_forward_vector = json.load(f)
 
-    global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
+    global_sys = Global_System(initial_positions, drones_forward_vector)
     global_sys.add_jammers('FY1', 1.5, 3.6)
 
     result = global_sys.detect_occlusion_single_jammer(

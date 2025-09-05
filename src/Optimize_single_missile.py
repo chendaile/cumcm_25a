@@ -1,18 +1,18 @@
 import json
-from Problem_object import Global_System_Q123
+from Problem_object import Global_System
 from Virtualizer import virtualize_all_jammers
 
 
-def optimize_Q23():
+def optimize_single_missile(drone_ids, n_jammers, population_size, generations):
     with open("data-bin/initial_positions.json") as f:
         initial_positions = json.load(f)
-    with open("data-bin/drones_forward_vector.json") as f:
+    with open("data-bin/initial_drones_forward_vector.json") as f:
         drones_forward_vector = json.load(f)
-    global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
+    global_sys = Global_System(initial_positions, drones_forward_vector)
     print("Starting optimization ")
 
     best_params = global_sys.optimize_single_missile_drone_all_jammers(
-        drone_ids=['FY1', 'FY2'], n_jammers=1, population_size=150, generations=10, plot_convergence=True)
+        drone_ids, n_jammers, population_size, generations, plot_convergence=True)
 
     if best_params:
         print(f"\nOptimization completed!")
@@ -24,7 +24,6 @@ def optimize_Q23():
             for i, (father_t, smoke_delay) in enumerate(drone_data[2]):
                 print(
                     f"    Jammer {i+1}: release_t={father_t:.2f}s, smoke_delay={smoke_delay:.2f}s")
-
         test(global_sys, best_params)
     else:
         print("Optimization failed to find valid parameters")
@@ -45,29 +44,24 @@ def test(global_sys, best_params):
     for i, (start, end) in enumerate(cover_intervals):
         print(
             f"  Interval {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
-
     all_jammers = []
     for drone_id in best_params['drones']:
         all_jammers.extend(global_sys.jammers[drone_id])
-
-    # 准备所有相关的drone对象
     active_drones = {
         drone_id: global_sys.Drones[drone_id] for drone_id in best_params['drones']}
-
     virtualize_all_jammers(
         8.0, global_sys.Missiles['M1'], active_drones,
         all_jammers, global_sys.true_goal)
 
 
 if __name__ == '__main__':
-    # with open("data-bin/initial_positions.json") as f:
-    #     initial_positions = json.load(f)
-    # with open("data-bin/drones_forward_vector.json") as f:
-    #     drones_forward_vector = json.load(f)
-    # global_sys = Global_System_Q123(initial_positions, drones_forward_vector)
-    # best_params = {
-    #     'velocity': [-116.099, 1, 0],
-    #     'jammers': [(0.746, 0.27)]
-    # }
-    # test(global_sys, best_params)
-    optimize_Q23()
+    with open("data-bin/initial_positions.json") as f:
+        initial_positions = json.load(f)
+    with open("data-bin/initial_drones_forward_vector.json") as f:
+        drones_forward_vector = json.load(f)
+    global_sys = Global_System(initial_positions, drones_forward_vector)
+    best_params = {
+        'velocity': [-116.099, 1, 0],
+        'jammers': [(0.746, 0.27)]
+    }
+    test(global_sys, best_params)

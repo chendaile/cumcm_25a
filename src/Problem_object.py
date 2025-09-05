@@ -102,14 +102,19 @@ class Drone:
                       self.forward_vector, smoke_release_delay)
 
 
-class Global_System_Q123:
+class Global_System:
     """Single messile and single drone"""
 
     def __init__(self, initial_positions: dict, drones_forward_vector: dict):
-        self.Drones = {f'FY{str(i)}': Drone(
-            np.array(initial_positions['drones'][f'FY{str(i)}']),
-            np.array(drones_forward_vector[f'FY{str(i)}'])) for i in [1]}
-        self.jammers = {f'FY{str(i)}': [] for i in [1]}
+        self.Drones = {}
+        self.jammers = {}
+        for drone_id in initial_positions['drones']:
+            if drone_id in drones_forward_vector:
+                self.Drones[drone_id] = Drone(
+                    np.array(initial_positions['drones'][drone_id]),
+                    np.array(drones_forward_vector[drone_id]))
+                self.jammers[drone_id] = []
+
         self.Missiles = {f'M{str(i)}': Missile(
             np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1]}
         self.true_goal = True_goal(
