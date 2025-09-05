@@ -139,3 +139,9 @@
 问题: 增强GA算法搜索能力，让其没有进展时扩大搜索范围
 回答: 已增强GA算法：1.添加停滞检测和自适应变异策略；2.实现种群重启机制；3.增加多样性保持功能；4.动态调整锦标赛选择和精英比例；5.添加多样性监控可视化。算法能在停滞时自动扩大搜索范围，保持整体完整性。
 ---
+问题: GA算法中可以用njit优化计算的方面
+回答: 已用njit优化：1.多样性计算函数calculate_diversity_fast；2.速度参数交叉crossover_velocities；3.干扰弹参数交叉crossover_jammer_params；4.速度变异mutate_velocity_fast；5.干扰弹变异mutate_jammer_fast。这些函数使用numpy数组和@njit装饰器，大幅提升计算密集型操作的性能。
+---
+问题: save_result_to_file函数中加入遮挡的具体时间interval
+回答: 已在save_result_to_file函数中添加遮挡时间间隔信息：1.重新配置系统获取cover_intervals；2.输出每个遮挡区间的开始时间、结束时间和持续时长；3.格式为"区间X: 开始s - 结束s (持续: 时长s)"，便于分析优化结果的具体遮挡效果。
+---

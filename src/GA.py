@@ -3,30 +3,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import json
-from numba import njit
+from numba import njit, types
+from numba.typed import Dict, List
 
 
 @njit
 def repair_jammers_timing(jammers_times, min_interval=1.0):
-    """加速的干扰弹时间修复函数"""
     if len(jammers_times) <= 1:
         return jammers_times
-
-    # 按发射时间排序
     sorted_indices = np.argsort(jammers_times[:, 0])
     sorted_times = jammers_times[sorted_indices]
-
-    # 调整间隔
     for i in range(1, len(sorted_times)):
         if sorted_times[i, 0] < sorted_times[i-1, 0] + min_interval:
             sorted_times[i, 0] = sorted_times[i-1, 0] + min_interval
-
     return sorted_times
 
 
 @njit
 def apply_velocity_constraints(vx, vy, min_speed=70.0, max_speed=140.0):
-    """加速的速度约束函数"""
     magnitude = np.sqrt(vx**2 + vy**2)
     if magnitude < min_speed:
         scale = min_speed / magnitude
@@ -35,6 +29,68 @@ def apply_velocity_constraints(vx, vy, min_speed=70.0, max_speed=140.0):
         scale = max_speed / magnitude
         return vx * scale, vy * scale
     return vx, vy
+
+
+@njit
+def calculate_diversity_fast(velocities, n_drones, population_size):
+    """快速计算种群多样性"""
+    if population_size < 2:
+        return 0.0
+
+    total_distance = 0.0
+    count = 0
+
+    for i in range(population_size):
+        for j in range(i+1, population_size):
+            distance = 0.0
+            for drone_idx in range(n_drones):
+                dist_x = (velocities[i, drone_idx, 0] -
+                          velocities[j, drone_idx, 0]) ** 2
+                dist_y = (velocities[i, drone_idx, 1] -
+                          velocities[j, drone_idx, 1]) ** 2
+                distance += dist_x + dist_y
+            total_distance += distance ** 0.5
+            count += 1
+
+    return total_distance / count if count > 0 else 0.0
+
+
+@njit
+def crossover_velocities(parent1_vel, parent2_vel, alpha, noise_scale):
+    """快速交叉速度参数"""
+    child_x = alpha * \
+        parent1_vel[0] + (1 - alpha) * parent2_vel[0] + \
+        np.random.normal(0, noise_scale)
+    child_y = alpha * \
+        parent1_vel[1] + (1 - alpha) * parent2_vel[1] + \
+        np.random.normal(0, noise_scale)
+    return apply_velocity_constraints(child_x, child_y)
+
+
+@njit
+def crossover_jammer_params(parent1_jammer, parent2_jammer, beta):
+    """快速交叉干扰弹参数"""
+    father_t = beta * parent1_jammer[0] + (1 - beta) * parent2_jammer[0]
+    smoke_delay = beta * parent1_jammer[1] + (1 - beta) * parent2_jammer[1]
+    return (max(0.0, min(5.0, father_t)), max(0.0, min(5.0, smoke_delay)))
+
+
+@njit
+def mutate_velocity_fast(velocity, noise_scale):
+    """快速变异速度参数"""
+    new_vx = velocity[0] + np.random.normal(0, noise_scale)
+    new_vy = velocity[1] + np.random.normal(0, noise_scale)
+    return apply_velocity_constraints(new_vx, new_vy)
+
+
+@njit
+def mutate_jammer_fast(jammer_params, noise_t, noise_delay):
+    """快速变异干扰弹参数"""
+    new_father_t = max(
+        0.0, min(5.0, jammer_params[0] + np.random.normal(0, noise_t)))
+    new_smoke_delay = max(
+        0.0, min(5.0, jammer_params[1] + np.random.normal(0, noise_delay)))
+    return (new_father_t, new_smoke_delay)
 
 
 class GeneticOptimizer:
@@ -59,7 +115,7 @@ class GeneticOptimizer:
         individual = {}
         for drone_id in self.drone_ids:
             drone_params = params.get(
-                drone_id, params['FY1'])  # 如果没有特定参数，使用FY1作为默认
+                drone_id, params['FY1'])
             velocity_x = drone_params['velocity']['velocity_x']
             velocity_y = drone_params['velocity']['velocity_y']
 
@@ -105,26 +161,24 @@ class GeneticOptimizer:
         child = {}
         for drone_id in self.drone_ids:
             alpha = random.uniform(0.3, 0.7)
-            child_x = alpha * \
-                parent1[drone_id][0] + (1 - alpha) * \
-                parent2[drone_id][0] + random.gauss(0, 5)
-            child_y = alpha * \
-                parent1[drone_id][1] + (1 - alpha) * \
-                parent2[drone_id][1] + random.gauss(0, 5)
-
-            child_x, child_y = apply_velocity_constraints(child_x, child_y)
+            # 使用njit加速的速度交叉
+            parent1_vel = np.array(
+                [parent1[drone_id][0], parent1[drone_id][1]])
+            parent2_vel = np.array(
+                [parent2[drone_id][0], parent2[drone_id][1]])
+            child_x, child_y = crossover_velocities(
+                parent1_vel, parent2_vel, alpha, 5.0)
 
             child_jammers = []
             for i in range(len(parent1[drone_id][2])):
                 if random.random() < 0.6:
                     beta = random.uniform(0.2, 0.8)
-                    father_t = beta * \
-                        parent1[drone_id][2][i][0] + \
-                        (1 - beta) * parent2[drone_id][2][i][0]
-                    smoke_delay = beta * \
-                        parent1[drone_id][2][i][1] + \
-                        (1 - beta) * parent2[drone_id][2][i][1]
-                    child_jammers.append((father_t, smoke_delay))
+                    # 使用njit加速的干扰弹参数交叉
+                    parent1_jammer = np.array(parent1[drone_id][2][i])
+                    parent2_jammer = np.array(parent2[drone_id][2][i])
+                    child_jammer = crossover_jammer_params(
+                        parent1_jammer, parent2_jammer, beta)
+                    child_jammers.append(child_jammer)
                 else:
                     child_jammers.append(random.choice(
                         [parent1[drone_id][2][i], parent2[drone_id][2][i]]))
@@ -145,16 +199,14 @@ class GeneticOptimizer:
                 noise_scale = base_noise * intensity_factor
 
                 if self.stagnation_counter > self.stagnation_threshold // 2:
-                    individual[drone_id][0] += random.gauss(
-                        0, noise_scale * 1.5)
-                    individual[drone_id][1] += random.gauss(
-                        0, noise_scale * 1.5)
-                else:
-                    individual[drone_id][0] += random.gauss(0, noise_scale)
-                    individual[drone_id][1] += random.gauss(0, noise_scale)
+                    noise_scale *= 1.5
 
-                individual[drone_id][0], individual[drone_id][1] = apply_velocity_constraints(
-                    individual[drone_id][0], individual[drone_id][1])
+                # 使用njit加速的速度变异
+                current_vel = np.array(
+                    [individual[drone_id][0], individual[drone_id][1]])
+                new_vx, new_vy = mutate_velocity_fast(current_vel, noise_scale)
+                individual[drone_id][0] = new_vx
+                individual[drone_id][1] = new_vy
 
             jammer_mutation_rate = 0.15 * intensity_factor
             for i in range(len(individual[drone_id][2])):
@@ -167,12 +219,11 @@ class GeneticOptimizer:
                     noise_t = base_noise_t * intensity_factor
                     noise_delay = base_noise_delay * intensity_factor
 
-                    new_father_t = max(0.0, min(5.0,
-                                                individual[drone_id][2][i][0] + random.gauss(0, noise_t)))
-                    new_smoke_delay = max(0.0, min(5.0,
-                                                   individual[drone_id][2][i][1] + random.gauss(0, noise_delay)))
-                    individual[drone_id][2][i] = (
-                        new_father_t, new_smoke_delay)
+                    # 使用njit加速的干扰弹参数变异
+                    current_jammer = np.array(individual[drone_id][2][i])
+                    new_jammer = mutate_jammer_fast(
+                        current_jammer, noise_t, noise_delay)
+                    individual[drone_id][2][i] = new_jammer
         return self.repair_individual(individual)
 
     def tournament_selection(self, population, fitnesses, tournament_size=3):
@@ -196,23 +247,21 @@ class GeneticOptimizer:
         return new_population
 
     def calculate_diversity(self, population):
+        """计算种群多样性，使用njit加速"""
         if len(population) < 2:
             return 0.0
-        total_distance = 0.0
-        count = 0
-        for i in range(len(population)):
-            for j in range(i+1, len(population)):
-                distance = 0.0
-                for drone_id in self.drone_ids:
-                    dist_x = (population[i][drone_id][0] -
-                              population[j][drone_id][0]) ** 2
-                    dist_y = (population[i][drone_id][1] -
-                              population[j][drone_id][1]) ** 2
-                    distance += dist_x + dist_y
-                total_distance += distance ** 0.5
-                count += 1
 
-        return total_distance / count if count > 0 else 0.0
+        # 转换为numpy数组以利用njit加速
+        n_pop = len(population)
+        n_drones = len(self.drone_ids)
+        velocities = np.zeros((n_pop, n_drones, 2), dtype=np.float64)
+
+        for i, individual in enumerate(population):
+            for j, drone_id in enumerate(self.drone_ids):
+                velocities[i, j, 0] = individual[drone_id][0]
+                velocities[i, j, 1] = individual[drone_id][1]
+
+        return calculate_diversity_fast(velocities, n_drones, n_pop)
 
     def optimize(self, plot_convergence=False):
         population = [self.create_individual()
@@ -223,6 +272,7 @@ class GeneticOptimizer:
 
         for generation in range(self.generations):
             fitnesses = []
+            print(f"Generation {generation+1}")
             for individual in population:
                 fitness = self.evaluate_individual(individual)
                 fitnesses.append(fitness)
@@ -311,9 +361,29 @@ class GeneticOptimizer:
 
     def save_result_to_file(self, result):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # 获取遮挡时间间隔
+        for drone_id, drone_data in result['drones'].items():
+            self.global_system.reset_jammers(drone_id)
+            self.global_system.update_drone_velocity(
+                drone_id, [drone_data[0], drone_data[1], 0])
+            for father_t, smoke_delay in drone_data[2]:
+                self.global_system.add_jammers(drone_id, father_t, smoke_delay)
+
+        cover_intervals = self.global_system.get_cover_intervals_all_jammers()
+
         with open(f'output/optimization_results_{self.Qname}.txt', 'a', encoding='utf-8') as f:
             f.write(f"优化结果 - {timestamp}\n")
             f.write(f"覆盖时长: {result['duration']:.3f}秒\n")
+
+            # 写入遮挡时间间隔
+            f.write(f"遮挡时间间隔:\n")
+            if cover_intervals:
+                for i, (start, end) in enumerate(cover_intervals):
+                    f.write(
+                        f"  区间{i+1}: {start:.2f}s - {end:.2f}s (持续: {end-start:.2f}s)\n")
+            else:
+                f.write("  无有效遮挡时间间隔\n")
 
             for drone_id, drone_data in result['drones'].items():
                 f.write(f"{drone_id}:\n")
@@ -325,4 +395,4 @@ class GeneticOptimizer:
                         f"    干扰弹{i+1}: 发射时间={father_t:.2f}s, 烟雾延迟={smoke_delay:.2f}s\n")
             f.write("-" * 50 + "\n")
 
-        print(f"结果已保存到 output/optimization_results.txt")
+        print(f"结果已保存到 output/optimization_results_{self.Qname}.txt")
