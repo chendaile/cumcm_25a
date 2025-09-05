@@ -1,7 +1,8 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import os
-import shutil
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 
 
 def virtualize_single_jammer(global_t, missile, drone, jammer, true_goal):
@@ -12,6 +13,7 @@ def virtualize_single_jammer(global_t, missile, drone, jammer, true_goal):
 
 def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_only=False, save_path=None):
     """可视化所有干扰弹的函数"""
+
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
 
@@ -76,7 +78,7 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
                 cos_alpha = np.sqrt(1 - sin_alpha**2)
 
                 cone_points = []
-                cone_theta = np.linspace(0, 2*np.pi, 150)  # 减少线条数量避免过度拥挤
+                cone_theta = np.linspace(0, 2*np.pi, 150)
                 for theta_val in cone_theta:
                     tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
                         (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
@@ -89,10 +91,9 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
     ax.set_ylabel('Y (m)')
     ax.set_zlabel('Z (m)')
 
-    # 固定坐标轴范围
-    ax.set_xlim(0, 22000)
-    ax.set_ylim(0, 1500)
-    ax.set_zlim(0, 1500)
+    ax.set_xlim([0, 22000])
+    ax.set_ylim([-3500, 0])
+    ax.set_zlim([0, 2000])
 
     ax.legend()
     ax.set_title(
@@ -107,12 +108,12 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
             f'tmp/visualization_t_{global_t}s.png', dpi=800, bbox_inches='tight')
 
     if save_only:
-        plt.close(fig)  # 仅保存不显示，释放内存
+        plt.close(fig)
     else:
         plt.show()
 
 
-def photography(missile, drones, jammers, true_goal, time_start=0.0, time_end=40.0, fps=5, output_dir='tmp/frames'):
+def photography(missile, drones, jammers, true_goal, time_start=5.0, time_end=25.0, fps=5, output_dir='tmp/frames'):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     dt = 1.0 / fps
@@ -120,21 +121,18 @@ def photography(missile, drones, jammers, true_goal, time_start=0.0, time_end=40
     total_frames = len(time_points)
     print(f"开始摄影: {time_start}s - {time_end}s, {fps}fps, 共{total_frames}帧")
     for i, global_t in enumerate(time_points):
-        # 保存图片路径
         frame_filename = f'{output_dir}/frame_{i:04d}_t_{global_t:.2f}s.png'
         virtualize_all_jammers(global_t, missile, drones, jammers, true_goal,
                                save_only=True, save_path=frame_filename)
-        if (i + 1) % (fps * 2) == 0:  # 每2秒显示一次进度
+        if (i + 1) % (fps * 2) == 0:
             progress = (i + 1) / total_frames * 100
             print(f"进度: {progress:.1f}% ({i+1}/{total_frames} 帧)")
 
     print(f"摄影完成！共生成 {total_frames} 帧图片")
     print(f"图片保存在: {output_dir}")
     print(f"转换为视频的命令:")
-    print(f"  # Create sequential links first:")
+    print(f"  # Create sequential links first in output directory:")
     print(
         f"  python3 -c \"import os,glob; files=sorted(glob.glob('{output_dir}/frame_*_t_*.png'), key=lambda x: float(x.split('_t_')[1].split('s.png')[0])); [os.symlink(f, f'seq_frame_{{i:04d}}.png') for i,f in enumerate(files)]\"")
     print(
         f"  ffmpeg -y -r {fps} -i seq_frame_%04d.png -vf scale=2942:2972 -c:v libx264 -pix_fmt yuv420p output/smoke_jamming_animation.mp4")
-
-    return output_dir, total_frames

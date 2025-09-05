@@ -48,6 +48,9 @@ class GeneticOptimizer:
         self.generations = generations
         self.best_individual = None
         self.best_fitness = 0
+        self.stagnation_counter = 0
+        self.stagnation_threshold = max(20, generations // 15)
+        self.mutation_intensity = 1.0
 
     def create_individual(self):
         with open('data-bin/ga_initial_params.json', 'r', encoding='utf-8') as f:
@@ -128,28 +131,46 @@ class GeneticOptimizer:
             child[drone_id] = [child_x, child_y, child_jammers]
         return self.repair_individual(child)
 
-    def mutate(self, individual, generation):
-        mutation_rate = 0.25 if generation < self.generations // 2 else 0.15
+    def adaptive_mutate(self, individual, generation):
+        base_mutation_rate = 0.25 if generation < self.generations // 2 else 0.15
+        stagnation_boost = 1.0 + \
+            (self.stagnation_counter / self.stagnation_threshold) * 2.0
+        adaptive_rate = min(0.6, base_mutation_rate * stagnation_boost)
+
+        intensity_factor = self.mutation_intensity * stagnation_boost
 
         for drone_id in self.drone_ids:
-            if random.random() < mutation_rate:
-                noise_scale = max(5, 30 - generation * 25 / self.generations)
-                individual[drone_id][0] += random.gauss(0, noise_scale)
-                individual[drone_id][1] += random.gauss(0, noise_scale)
+            if random.random() < adaptive_rate:
+                base_noise = max(5, 30 - generation * 25 / self.generations)
+                noise_scale = base_noise * intensity_factor
+
+                if self.stagnation_counter > self.stagnation_threshold // 2:
+                    individual[drone_id][0] += random.gauss(
+                        0, noise_scale * 1.5)
+                    individual[drone_id][1] += random.gauss(
+                        0, noise_scale * 1.5)
+                else:
+                    individual[drone_id][0] += random.gauss(0, noise_scale)
+                    individual[drone_id][1] += random.gauss(0, noise_scale)
 
                 individual[drone_id][0], individual[drone_id][1] = apply_velocity_constraints(
                     individual[drone_id][0], individual[drone_id][1])
 
+            jammer_mutation_rate = 0.15 * intensity_factor
             for i in range(len(individual[drone_id][2])):
-                if random.random() < 0.15:
-                    noise_t = max(0.1, 0.5 - generation *
-                                  0.4 / self.generations)
-                    noise_delay = max(0.1, 0.6 - generation *
-                                      0.5 / self.generations)
-                    new_father_t = max(
-                        0.0, min(5.0, individual[drone_id][2][i][0] + random.gauss(0, noise_t)))
-                    new_smoke_delay = max(
-                        0.0, min(5.0, individual[drone_id][2][i][1] + random.gauss(0, noise_delay)))
+                if random.random() < jammer_mutation_rate:
+                    base_noise_t = max(
+                        0.1, 0.5 - generation * 0.4 / self.generations)
+                    base_noise_delay = max(
+                        0.1, 0.6 - generation * 0.5 / self.generations)
+
+                    noise_t = base_noise_t * intensity_factor
+                    noise_delay = base_noise_delay * intensity_factor
+
+                    new_father_t = max(0.0, min(5.0,
+                                                individual[drone_id][2][i][0] + random.gauss(0, noise_t)))
+                    new_smoke_delay = max(0.0, min(5.0,
+                                                   individual[drone_id][2][i][1] + random.gauss(0, noise_delay)))
                     individual[drone_id][2][i] = (
                         new_father_t, new_smoke_delay)
         return self.repair_individual(individual)
@@ -159,10 +180,46 @@ class GeneticOptimizer:
             list(zip(population, fitnesses)), k=tournament_size)
         return max(tournament, key=lambda x: x[1])[0]
 
+    def restart_population(self, keep_best=True):
+        print(
+            f"Population restart triggered after {self.stagnation_counter} stagnations")
+        new_population = []
+
+        if keep_best and self.best_individual:
+            new_population.append(self.best_individual.copy())
+
+        while len(new_population) < self.population_size:
+            new_population.append(self.create_individual())
+
+        self.stagnation_counter = 0
+        self.mutation_intensity = min(2.0, self.mutation_intensity * 1.5)
+        return new_population
+
+    def calculate_diversity(self, population):
+        if len(population) < 2:
+            return 0.0
+        total_distance = 0.0
+        count = 0
+        for i in range(len(population)):
+            for j in range(i+1, len(population)):
+                distance = 0.0
+                for drone_id in self.drone_ids:
+                    dist_x = (population[i][drone_id][0] -
+                              population[j][drone_id][0]) ** 2
+                    dist_y = (population[i][drone_id][1] -
+                              population[j][drone_id][1]) ** 2
+                    distance += dist_x + dist_y
+                total_distance += distance ** 0.5
+                count += 1
+
+        return total_distance / count if count > 0 else 0.0
+
     def optimize(self, plot_convergence=False):
         population = [self.create_individual()
                       for _ in range(self.population_size)]
         best_fitness_history = []
+        diversity_history = []
+        previous_best = 0
 
         for generation in range(self.generations):
             fitnesses = []
@@ -173,38 +230,72 @@ class GeneticOptimizer:
                 if fitness > self.best_fitness:
                     self.best_fitness = fitness
                     self.best_individual = individual.copy()
+                    self.stagnation_counter = 0
                     print(
                         f"Generation {generation+1}: New best {fitness:.3f}s")
 
+            if self.best_fitness <= previous_best + 1e-6:
+                self.stagnation_counter += 1
+            else:
+                self.stagnation_counter = 0
+            previous_best = self.best_fitness
+
+            diversity = self.calculate_diversity(population)
             best_fitness_history.append(self.best_fitness)
+            diversity_history.append(diversity)
+
+            if self.stagnation_counter >= self.stagnation_threshold:
+                population = self.restart_population()
+                continue
+
             population_with_fitness = list(zip(population, fitnesses))
             population_with_fitness.sort(key=lambda x: x[1], reverse=True)
 
             new_population = []
-            elite_size = self.population_size // 4
+            elite_size = max(1, self.population_size // 6)
+
             for i in range(elite_size):
                 new_population.append(population_with_fitness[i][0])
 
+            diversity_boost_size = max(2, self.population_size // 10)
+            for _ in range(diversity_boost_size):
+                new_population.append(self.create_individual())
+
             while len(new_population) < self.population_size:
-                parent1 = self.tournament_selection(population, fitnesses)
-                parent2 = self.tournament_selection(population, fitnesses)
+                tournament_size = 3 if diversity > 50 else 5
+                parent1 = self.tournament_selection(
+                    population, fitnesses, tournament_size)
+                parent2 = self.tournament_selection(
+                    population, fitnesses, tournament_size)
                 child = self.crossover(parent1, parent2)
-                child = self.mutate(child, generation)
+                child = self.adaptive_mutate(child, generation)
                 new_population.append(child)
 
             population = new_population
 
         if plot_convergence:
-            plt.figure(figsize=(10, 6))
-            plt.plot(range(1, self.generations+1), best_fitness_history,
+            plt.figure(figsize=(15, 5))
+
+            plt.subplot(1, 2, 1)
+            plt.plot(range(1, len(best_fitness_history)+1), best_fitness_history,
                      'r-', linewidth=2, label='Best Fitness')
             plt.xlabel('Generation')
             plt.ylabel('Coverage Duration (s)')
-            plt.title('Genetic Algorithm Optimization Convergence')
+            plt.title('Enhanced GA Optimization Convergence')
             plt.legend()
             plt.grid(True, alpha=0.3)
+
+            plt.subplot(1, 2, 2)
+            plt.plot(range(1, len(diversity_history)+1), diversity_history,
+                     'b-', linewidth=2, label='Population Diversity')
+            plt.xlabel('Generation')
+            plt.ylabel('Diversity')
+            plt.title('Population Diversity Evolution')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+
             plt.tight_layout()
-            plt.savefig('tmp/genetic_algorithm_convergence.png',
+            plt.savefig('tmp/enhanced_genetic_algorithm_convergence.png',
                         dpi=800, bbox_inches='tight')
             plt.show()
 
