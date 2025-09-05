@@ -1,5 +1,4 @@
 import datetime
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 import random
@@ -24,9 +23,11 @@ class GeneticOptimizer:
 
         individual = {}
         for drone_id in self.drone_ids:
-            velocity_x = params['velocity']['velocity_x'] + \
+            drone_params = params.get(
+                drone_id, params['FY1'])  # 如果没有特定参数，使用FY1作为默认
+            velocity_x = drone_params['velocity']['velocity_x'] + \
                 random.uniform(-10, 10)
-            velocity_y = params['velocity']['velocity_y'] + \
+            velocity_y = drone_params['velocity']['velocity_y'] + \
                 random.uniform(-10, 10)
             velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
 
@@ -41,9 +42,9 @@ class GeneticOptimizer:
 
             jammers = []
             for _ in range(self.n_jammers):
-                father_t = params['jammers']['father_t'] + \
+                father_t = drone_params['jammers']['father_t'] + \
                     random.uniform(-0.5, 0.5)
-                smoke_delay = params['jammers']['smoke_delay'] + \
+                smoke_delay = drone_params['jammers']['smoke_delay'] + \
                     random.uniform(-0.5, 0.5)
                 father_t = max(0.0, father_t)
                 smoke_delay = max(0.0, smoke_delay)

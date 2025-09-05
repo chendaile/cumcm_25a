@@ -16,13 +16,20 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal):
     missile_pos = missile.get_pos(global_t)
     target_pos = true_goal.bottom_center_pos
 
-    ax.scatter(*missile_pos, color='darkred', s=60, label='M1 Missile')
+    ax.scatter(*missile_pos, color='b', s=60, label='M1 Missile')
+    ax.text(missile_pos[0], missile_pos[1], missile_pos[2], '  M1',
+            fontsize=10, color='b', fontweight='bold')
+
     ax.scatter(*target_pos, color='green', s=50, label='True Target')
+    ax.text(target_pos[0], target_pos[1], target_pos[2], '  Target',
+            fontsize=10, color='green', fontweight='bold')
 
     for drone_id, drone in drones.items():
         drone_pos = drone.get_pos(global_t)
-        ax.scatter(*drone_pos, color='b', s=60,
+        ax.scatter(*drone_pos, color='darkred', s=60,
                    label=f'{drone_id}')
+        ax.text(drone_pos[0], drone_pos[1], drone_pos[2], f'  {drone_id}',
+                fontsize=10, color='darkred', fontweight='bold')
 
     colors = ['orange', 'yellow', 'cyan', 'magenta', 'lime']
     active_smoke_count = 0
@@ -46,6 +53,8 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal):
                             alpha=0.4, color=color)
             ax.scatter(*smoke_pos, color='orange', s=30,
                        marker='o', label=f'Smoke {i+1} Center')
+            ax.text(smoke_pos[0]+50, smoke_pos[1], smoke_pos[2]-150, f'S{i+1}',
+                    fontsize=10, color='orange', fontweight='bold')
 
             missile_to_smoke = smoke_pos - missile_pos
             smoke_distance = np.linalg.norm(missile_to_smoke)

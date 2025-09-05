@@ -1,10 +1,52 @@
 {
-  "velocity": {
-    "velocity_x": -126,
-    "velocity_y": 1.5
+  "FY1": {
+    "velocity": {
+      "velocity_x": -126,
+      "velocity_y": 1.5
+    },
+    "jammers": {
+      "father_t": 1.15,
+      "smoke_delay": 3.99
+    }
   },
-  "jammers": {
-    "father_t": 1.15,
-    "smoke_delay": 3.99
+  "FY2": {
+    "velocity": {
+      "velocity_x": -120,
+      "velocity_y": 0
+    },
+    "jammers": {
+      "father_t": 1.15,
+      "smoke_delay": 4
+    }
+  },
+  "FY3": {
+    "velocity": {
+      "velocity_x": -110,
+      "velocity_y": -0.5
+    },
+    "jammers": {
+      "father_t": 1.0,
+      "smoke_delay": 3.8
+    }
+  },
+  "FY4": {
+    "velocity": {
+      "velocity_x": -115,
+      "velocity_y": -25
+    },
+    "jammers": {
+      "father_t": 1.35,
+      "smoke_delay": 4.1
+    }
+  },
+  "FY5": {
+    "velocity": {
+      "velocity_x": -95,
+      "velocity_y": 35
+    },
+    "jammers": {
+      "father_t": 1.05,
+      "smoke_delay": 3.9
+    }
   }
 }
