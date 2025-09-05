@@ -13,7 +13,7 @@ def Q3():
     optimize_single_missile(drone_ids=['FY1'],
                             n_jammers=3,
                             population_size=150,
-                            generations=400,
+                            generations=300,
                             Qname='Q3')
 
 

@@ -34,5 +34,5 @@ def test_Q1(tmp_time=7.9):
 
 
 if __name__ == '__main__':
-    find_cover_seconds_Q1()
-    # test_Q1()
+    # find_cover_seconds_Q1()
+    test_Q1()

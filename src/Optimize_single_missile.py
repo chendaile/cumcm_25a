@@ -1,6 +1,6 @@
 import json
 from Problem_object import Global_System
-from Virtualizer import virtualize_all_jammers
+from Virtualizer import virtualize_all_jammers, photography
 
 
 def optimize_single_missile(drone_ids, n_jammers, population_size, generations, Qname):
@@ -49,9 +49,11 @@ def test(global_sys, best_params):
         all_jammers.extend(global_sys.jammers[drone_id])
     active_drones = {
         drone_id: global_sys.Drones[drone_id] for drone_id in best_params['drones']}
-    virtualize_all_jammers(
-        8.0, global_sys.Missiles['M1'], active_drones,
-        all_jammers, global_sys.true_goal)
+    # virtualize_all_jammers(
+    #     8.0, global_sys.Missiles['M1'], active_drones,
+    #     all_jammers, global_sys.true_goal)
+    photography(global_sys.Missiles['M1'], active_drones,
+                all_jammers, global_sys.true_goal)
 
 
 if __name__ == '__main__':
@@ -61,7 +63,10 @@ if __name__ == '__main__':
         drones_forward_vector = json.load(f)
     global_sys = Global_System(initial_positions, drones_forward_vector)
     best_params = {
-        'velocity': [-116.099, 1, 0],
-        'jammers': [(0.746, 0.27)]
+        'drones': {
+            "FY1": [-140, 1.13, [(0.66, 4.09),
+                                 (0.33, 3.92),
+                                 (3.17, 5.00)]]
+        }
     }
     test(global_sys, best_params)

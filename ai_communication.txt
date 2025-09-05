@@ -109,3 +109,9 @@
 问题: 更新一下src/Virtualizer.py,因为里面的函数只可以画一个jammer,我希望你改进为all jammers
 回答: 已更新Virtualizer.py：1.保留virtualize_single_jammer函数向后兼容；2.新增virtualize_all_jammers函数支持多个干扰弹可视化；3.不同烟雾使用不同颜色区分；4.显示活动烟雾数量。测试3个干扰弹优化结果2.95秒。
 ---
+问题: 其实你很多代码部分不是可以直接调用virtualize_all_jammers吗,为什么要再写一遍
+回答: 已重构photography函数，消除代码重复：通过向virtualize_all_jammers添加save_only和save_path参数，直接复用现有可视化逻辑。函数从150行精简到54行，提高代码维护性。
+---
+问题: 修改ffmpeg命令输出为正确的转换格式
+回答: 已修正photography函数中的ffmpeg命令：添加创建序列链接的python命令，使用正确的文件名模式和维度调整参数，确保视频转换成功。
+---
