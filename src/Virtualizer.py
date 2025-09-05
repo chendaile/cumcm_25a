@@ -88,6 +88,12 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
     ax.set_zlabel('Z (m)')
+
+    # 固定坐标轴范围
+    ax.set_xlim(0, 22000)
+    ax.set_ylim(0, 1500)
+    ax.set_zlim(0, 1500)
+
     ax.legend()
     ax.set_title(
         f'Smoke Jamming Visualization at t={global_t}s ({active_smoke_count} active smokes)')
@@ -95,7 +101,7 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
     plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.savefig(save_path, dpi=800, bbox_inches='tight')
     else:
         plt.savefig(
             f'tmp/visualization_t_{global_t}s.png', dpi=800, bbox_inches='tight')
@@ -106,7 +112,7 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
         plt.show()
 
 
-def photography(missile, drones, jammers, true_goal, time_start=5.0, time_end=20.0, fps=10, output_dir='tmp/frames'):
+def photography(missile, drones, jammers, true_goal, time_start=0.0, time_end=40.0, fps=5, output_dir='tmp/frames'):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     dt = 1.0 / fps

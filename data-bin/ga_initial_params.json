@@ -11,22 +11,22 @@
   },
   "FY2": {
     "velocity": {
-      "velocity_x": -120,
-      "velocity_y": 0
+      "velocity_x": 0,
+      "velocity_y": -70
     },
     "jammers": {
-      "father_t": 1.15,
-      "smoke_delay": 4
+      "father_t": 19,
+      "smoke_delay": 1
     }
   },
   "FY3": {
     "velocity": {
-      "velocity_x": -110,
-      "velocity_y": -0.5
+      "velocity_x": 0,
+      "velocity_y": 70
     },
     "jammers": {
-      "father_t": 1.0,
-      "smoke_delay": 3.8
+      "father_t": 19,
+      "smoke_delay": 1
     }
   },
   "FY4": {

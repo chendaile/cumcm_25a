@@ -3,6 +3,38 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import json
+from numba import njit
+
+
+@njit
+def repair_jammers_timing(jammers_times, min_interval=1.0):
+    """加速的干扰弹时间修复函数"""
+    if len(jammers_times) <= 1:
+        return jammers_times
+
+    # 按发射时间排序
+    sorted_indices = np.argsort(jammers_times[:, 0])
+    sorted_times = jammers_times[sorted_indices]
+
+    # 调整间隔
+    for i in range(1, len(sorted_times)):
+        if sorted_times[i, 0] < sorted_times[i-1, 0] + min_interval:
+            sorted_times[i, 0] = sorted_times[i-1, 0] + min_interval
+
+    return sorted_times
+
+
+@njit
+def apply_velocity_constraints(vx, vy, min_speed=70.0, max_speed=140.0):
+    """加速的速度约束函数"""
+    magnitude = np.sqrt(vx**2 + vy**2)
+    if magnitude < min_speed:
+        scale = min_speed / magnitude
+        return vx * scale, vy * scale
+    elif magnitude > max_speed:
+        scale = max_speed / magnitude
+        return vx * scale, vy * scale
+    return vx, vy
 
 
 class GeneticOptimizer:
@@ -25,33 +57,35 @@ class GeneticOptimizer:
         for drone_id in self.drone_ids:
             drone_params = params.get(
                 drone_id, params['FY1'])  # 如果没有特定参数，使用FY1作为默认
-            velocity_x = drone_params['velocity']['velocity_x'] + \
-                random.uniform(-10, 10)
-            velocity_y = drone_params['velocity']['velocity_y'] + \
-                random.uniform(-10, 10)
-            velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2)
+            velocity_x = drone_params['velocity']['velocity_x']
+            velocity_y = drone_params['velocity']['velocity_y']
 
-            if velocity_magnitude < 70:
-                scale = 70 / velocity_magnitude
-                velocity_x *= scale
-                velocity_y *= scale
-            elif velocity_magnitude > 140:
-                scale = 140 / velocity_magnitude
-                velocity_x *= scale
-                velocity_y *= scale
+            velocity_x, velocity_y = apply_velocity_constraints(
+                velocity_x, velocity_y)
 
             jammers = []
             for _ in range(self.n_jammers):
-                father_t = drone_params['jammers']['father_t'] + \
-                    random.uniform(-0.5, 0.5)
-                smoke_delay = drone_params['jammers']['smoke_delay'] + \
-                    random.uniform(-0.5, 0.5)
+                father_t = drone_params['jammers']['father_t']
+                smoke_delay = drone_params['jammers']['smoke_delay']
                 father_t = max(0.0, father_t)
                 smoke_delay = max(0.0, smoke_delay)
                 jammers.append((father_t, smoke_delay))
 
             individual[drone_id] = [velocity_x, velocity_y, jammers]
 
+        return self.repair_individual(individual)
+
+    def repair_individual(self, individual):
+        """确保同一无人机的干扰弹发射时间至少间隔1秒"""
+        for drone_id in individual:
+            jammers = individual[drone_id][2]
+            if len(jammers) > 1:
+                # 转换为numpy数组加速处理
+                jammers_array = np.array(jammers, dtype=np.float64)
+                repaired_array = repair_jammers_timing(jammers_array)
+                # 转换回tuple列表
+                individual[drone_id][2] = [(t[0], t[1])
+                                           for t in repaired_array]
         return individual
 
     def evaluate_individual(self, individual):
@@ -74,15 +108,8 @@ class GeneticOptimizer:
             child_y = alpha * \
                 parent1[drone_id][1] + (1 - alpha) * \
                 parent2[drone_id][1] + random.gauss(0, 5)
-            velocity_magnitude = np.sqrt(child_x**2 + child_y**2)
-            if velocity_magnitude < 70:
-                scale = 70 / velocity_magnitude
-                child_x *= scale
-                child_y *= scale
-            elif velocity_magnitude > 140:
-                scale = 140 / velocity_magnitude
-                child_x *= scale
-                child_y *= scale
+
+            child_x, child_y = apply_velocity_constraints(child_x, child_y)
 
             child_jammers = []
             for i in range(len(parent1[drone_id][2])):
@@ -99,7 +126,7 @@ class GeneticOptimizer:
                     child_jammers.append(random.choice(
                         [parent1[drone_id][2][i], parent2[drone_id][2][i]]))
             child[drone_id] = [child_x, child_y, child_jammers]
-        return child
+        return self.repair_individual(child)
 
     def mutate(self, individual, generation):
         mutation_rate = 0.25 if generation < self.generations // 2 else 0.15
@@ -109,16 +136,9 @@ class GeneticOptimizer:
                 noise_scale = max(5, 30 - generation * 25 / self.generations)
                 individual[drone_id][0] += random.gauss(0, noise_scale)
                 individual[drone_id][1] += random.gauss(0, noise_scale)
-                velocity_magnitude = np.sqrt(
-                    individual[drone_id][0]**2 + individual[drone_id][1]**2)
-                if velocity_magnitude < 70:
-                    scale = 70 / velocity_magnitude
-                    individual[drone_id][0] *= scale
-                    individual[drone_id][1] *= scale
-                elif velocity_magnitude > 140:
-                    scale = 140 / velocity_magnitude
-                    individual[drone_id][0] *= scale
-                    individual[drone_id][1] *= scale
+
+                individual[drone_id][0], individual[drone_id][1] = apply_velocity_constraints(
+                    individual[drone_id][0], individual[drone_id][1])
 
             for i in range(len(individual[drone_id][2])):
                 if random.random() < 0.15:
@@ -132,7 +152,7 @@ class GeneticOptimizer:
                         0.0, min(5.0, individual[drone_id][2][i][1] + random.gauss(0, noise_delay)))
                     individual[drone_id][2][i] = (
                         new_father_t, new_smoke_delay)
-        return individual
+        return self.repair_individual(individual)
 
     def tournament_selection(self, population, fitnesses, tournament_size=3):
         tournament = random.choices(

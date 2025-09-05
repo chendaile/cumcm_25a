@@ -178,7 +178,7 @@ class Global_System:
 
     def get_cover_intervals_all_jammers(self):
         covered_times = []
-        test_times = np.arange(5.1, 20, 0.01)
+        test_times = np.arange(0, 40, 0.01)
         for t in test_times:
             all_jammers = []
             for drone_id in self.jammers:

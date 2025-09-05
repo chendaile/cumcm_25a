@@ -64,9 +64,7 @@ if __name__ == '__main__':
     global_sys = Global_System(initial_positions, drones_forward_vector)
     best_params = {
         'drones': {
-            "FY1": [-140, 1.13, [(0.66, 4.09),
-                                 (0.33, 3.92),
-                                 (3.17, 5.00)]]
+            "FY2": [0, -70, [(19, 1)]]
         }
     }
     test(global_sys, best_params)
