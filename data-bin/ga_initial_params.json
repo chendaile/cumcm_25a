@@ -21,12 +21,12 @@
   },
   "FY3": {
     "velocity": {
-      "velocity_x": 0,
-      "velocity_y": 70
+      "velocity_x": 21.39,
+      "velocity_y": 138.38
     },
     "jammers": {
-      "father_t": 40,
-      "smoke_delay": 10
+      "father_t": 19.41,
+      "smoke_delay": 2.98
     }
   },
   "FY4": {

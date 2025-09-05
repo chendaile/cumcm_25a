@@ -92,7 +92,7 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
     ax.set_zlabel('Z (m)')
 
     ax.set_xlim([0, 22000])
-    ax.set_ylim([-3500, 0])
+    ax.set_ylim([-3500, 1500])
     ax.set_zlim([0, 2000])
 
     ax.legend()
@@ -113,7 +113,7 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
         plt.show()
 
 
-def photography(missile, drones, jammers, true_goal, time_start=5.0, time_end=25.0, fps=5, output_dir='tmp/frames'):
+def photography(missile, drones, jammers, true_goal, time_start=5, time_end=25.0, fps=10, output_dir='tmp/frames'):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     dt = 1.0 / fps
