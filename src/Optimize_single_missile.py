@@ -3,7 +3,7 @@ from Problem_object import Global_System
 from Virtualizer import virtualize_all_jammers
 
 
-def optimize_single_missile(drone_ids, n_jammers, population_size, generations):
+def optimize_single_missile(drone_ids, n_jammers, population_size, generations, Qname):
     with open("data-bin/initial_positions.json") as f:
         initial_positions = json.load(f)
     with open("data-bin/initial_drones_forward_vector.json") as f:
@@ -12,7 +12,7 @@ def optimize_single_missile(drone_ids, n_jammers, population_size, generations):
     print("Starting optimization ")
 
     best_params = global_sys.optimize_single_missile_drone_all_jammers(
-        drone_ids, n_jammers, population_size, generations, plot_convergence=True)
+        drone_ids, n_jammers, population_size, generations, plot_convergence=True, Qname=Qname)
 
     if best_params:
         print(f"\nOptimization completed!")

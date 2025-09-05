@@ -7,7 +7,8 @@ import json
 
 
 class GeneticOptimizer:
-    def __init__(self, global_system, drone_ids, n_jammers, population_size, generations):
+    def __init__(self, global_system, drone_ids, n_jammers, population_size, generations, Qname):
+        self.Qname = Qname
         self.global_system = global_system
         self.drone_ids = [drone_ids] if isinstance(
             drone_ids, str) else drone_ids
@@ -198,7 +199,7 @@ class GeneticOptimizer:
 
     def save_result_to_file(self, result):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open('output/optimization_results.txt', 'a', encoding='utf-8') as f:
+        with open(f'output/optimization_results_{self.Qname}.txt', 'a', encoding='utf-8') as f:
             f.write(f"优化结果 - {timestamp}\n")
             f.write(f"覆盖时长: {result['duration']:.3f}秒\n")
 

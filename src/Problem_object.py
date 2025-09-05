@@ -214,7 +214,7 @@ class Global_System:
 
     def optimize_single_missile_drone_all_jammers(self, drone_ids, n_jammers,
                                                   population_size,
-                                                  generations, plot_convergence):
+                                                  generations, plot_convergence, Qname):
         optimizer = GeneticOptimizer(
-            self, drone_ids, n_jammers, population_size, generations)
+            self, drone_ids, n_jammers, population_size, generations, Qname)
         return optimizer.optimize(plot_convergence)
