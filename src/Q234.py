@@ -29,7 +29,7 @@ def Q4_help1():
     optimize_single_missile(drone_ids=['FY1'],
                             n_jammers=1,
                             population_size=150,
-                            generations=20,
+                            generations=300,
                             Qname='Q4_help1')
 
 
@@ -44,10 +44,11 @@ def Q4_help2():
 def Q4_help3():
     optimize_single_missile(drone_ids=['FY3'],
                             n_jammers=1,
-                            population_size=250,
-                            generations=100,
+                            population_size=150,
+                            generations=300,
                             Qname='Q4_help3')
 
 
 if __name__ == "__main__":
-    Q4_help1()
+    # Q4_help1()
+    Q4_help3()

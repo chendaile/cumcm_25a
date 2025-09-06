@@ -85,7 +85,10 @@ def mutate_jammer_fast(jammer_params, noise_t, noise_delay):
 
 
 class GeneticOptimizer:
-    def __init__(self, global_system, drone_ids, n_jammers, population_size, generations, Qname):
+    def __init__(self, global_system, drone_ids, n_jammers,
+                 population_size, generations, Qname,
+                 targeted_missile_ids=['M1']):
+        self.targeted_missile_ids = targeted_missile_ids
         self.Qname = Qname
         self.global_system = global_system
         self.drone_ids = [drone_ids] if isinstance(
@@ -110,7 +113,6 @@ class GeneticOptimizer:
                 drone_id, params['FY1'])
             velocity_x = drone_params['velocity']['velocity_x']
             velocity_y = drone_params['velocity']['velocity_y']
-
             velocity_x, velocity_y = apply_velocity_constraints(
                 velocity_x, velocity_y)
 
@@ -121,9 +123,7 @@ class GeneticOptimizer:
                 father_t = max(0.0, father_t)
                 smoke_delay = max(0.0, smoke_delay)
                 jammers.append((father_t, smoke_delay))
-
             individual[drone_id] = [velocity_x, velocity_y, jammers]
-
         return self.repair_individual(individual)
 
     def repair_individual(self, individual):
@@ -147,7 +147,10 @@ class GeneticOptimizer:
                 drone_id, [drone_data[0], drone_data[1], 0])
             for father_t, smoke_delay in drone_data[2]:
                 self.global_system.add_jammers(drone_id, father_t, smoke_delay)
-        return self.global_system.get_cover_seconds_all_jammers()
+
+        missile_seconds = self.global_system.get_cover_seconds_all_jammers(
+            self.targeted_missile_ids)
+        return sum(missile_seconds.values())
 
     def crossover(self, parent1, parent2):
         child = {}
@@ -354,28 +357,36 @@ class GeneticOptimizer:
                 drone_id, [drone_data[0], drone_data[1], 0])
             for father_t, smoke_delay in drone_data[2]:
                 self.global_system.add_jammers(drone_id, father_t, smoke_delay)
-        cover_intervals = self.global_system.get_cover_intervals_all_jammers()
+        cover_intervals = self.global_system.get_cover_intervals_all_jammers(
+            self.targeted_missile_ids)
+        missile_seconds = self.global_system.get_cover_seconds_all_jammers(
+            self.targeted_missile_ids)
 
         with open(f'output/optimization_results_{self.Qname}.txt', 'a', encoding='utf-8') as f:
             f.write(f"优化结果 - {timestamp}\n")
-            f.write(f"覆盖时长: {result['duration']:.3f}秒\n")
+            f.write(f"总覆盖时长: {result['duration']:.3f}秒\n")
 
-            f.write(f"遮挡时间间隔:\n")
-            if cover_intervals:
-                for i, (start, end) in enumerate(cover_intervals):
-                    f.write(
-                        f"  区间{i+1}: {start:.2f}s - {end:.2f}s (持续: {end-start:.2f}s)\n")
-            else:
-                f.write("  无有效遮挡时间间隔\n")
+            f.write(f"各导弹覆盖情况:\n")
+            for missile_id in self.targeted_missile_ids:
+                duration = missile_seconds.get(missile_id, 0.0)
+                f.write(f"  {missile_id}: {duration:.3f}秒\n")
+                intervals = cover_intervals.get(missile_id, [])
+                if intervals:
+                    for i, (start, end) in enumerate(intervals):
+                        f.write(
+                            f"    区间{i+1}: {start:.2f}s - {end:.2f}s (持续: {end-start:.2f}s)\n")
+                else:
+                    f.write("    无有效遮挡时间间隔\n")
 
+            f.write(f"无人机参数:\n")
             for drone_id, drone_data in result['drones'].items():
-                f.write(f"{drone_id}:\n")
+                f.write(f"  {drone_id}:\n")
                 f.write(
-                    f"  速度: [{drone_data[0]:.2f}, {drone_data[1]:.2f}, 0.00]\n")
-                f.write(f"  干扰弹参数:\n")
+                    f"    速度: [{drone_data[0]:.2f}, {drone_data[1]:.2f}, 0.00]\n")
+                f.write(f"    干扰弹参数:\n")
                 for i, (father_t, smoke_delay) in enumerate(drone_data[2]):
                     f.write(
-                        f"    干扰弹{i+1}: 发射时间={father_t:.2f}s, 烟雾延迟={smoke_delay:.2f}s\n")
+                        f"      干扰弹{i+1}: 发射时间={father_t:.2f}s, 烟雾延迟={smoke_delay:.2f}s\n")
             f.write("-" * 50 + "\n")
 
         print(f"结果已保存到 output/optimization_results_{self.Qname}.txt")

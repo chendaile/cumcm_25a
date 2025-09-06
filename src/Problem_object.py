@@ -116,8 +116,10 @@ class Global_System:
                     np.array(drones_forward_vector[drone_id]))
                 self.jammers[drone_id] = []
 
-        self.Missiles = {f'M{str(i)}': Missile(
-            np.array(initial_positions['missiles'][f'M{str(i)}'])) for i in [1]}
+        self.Missiles = {}
+        for missile_key in initial_positions['missiles']:
+            self.Missiles[missile_key] = Missile(
+                np.array(initial_positions['missiles'][missile_key]))
         self.true_goal = True_goal(
             np.array(initial_positions['target']['true_target']))
 
@@ -171,36 +173,48 @@ class Global_System:
                 return True
         return False
 
-    def get_cover_seconds_all_jammers(self):
-        intervals = self.get_cover_intervals_all_jammers()
-        if not intervals:
-            return 0.0
-        return sum(end - start for start, end in intervals)
+    def get_cover_seconds_all_jammers(self, missile_ids):
+        intervals = self.get_cover_intervals_all_jammers(missile_ids)
+        missile_seconds = {}
+        for missile_id, missile_intervals in intervals.items():
+            if not missile_intervals:
+                missile_seconds[missile_id] = 0.0
+            else:
+                missile_seconds[missile_id] = sum(
+                    end - start for start, end in missile_intervals)
+        return missile_seconds
 
-    def get_cover_intervals_all_jammers(self):
-        covered_times = []
+    def get_cover_intervals_all_jammers(self, missile_ids):
+        missile_intervals = {}
         test_times = np.arange(0, 40, 0.01)
-        for t in test_times:
-            all_jammers = []
-            for drone_id in self.jammers:
-                all_jammers.extend(self.jammers[drone_id])
-            result = self.detect_occlusion_all_jammers(
-                t, self.Missiles['M1'], all_jammers)
-            if result:
-                covered_times.append(t)
 
-        if not covered_times:
-            return []
-        intervals = []
-        start = covered_times[0]
-        prev = covered_times[0]
-        for t in covered_times[1:]:
-            if t - prev > 0.1:
-                intervals.append((start, prev))
-                start = t
-            prev = t
-        intervals.append((start, prev))
-        return intervals
+        for missile_id in missile_ids:
+            missile = self.Missiles[missile_id]
+            covered_times = []
+            for t in test_times:
+                all_jammers = []
+                for drone_id in self.jammers:
+                    all_jammers.extend(self.jammers[drone_id])
+                result = self.detect_occlusion_all_jammers(
+                    t, missile, all_jammers)
+                if result:
+                    covered_times.append(t)
+
+            if not covered_times:
+                missile_intervals[missile_id] = []
+                continue
+
+            intervals = []
+            start = covered_times[0]
+            prev = covered_times[0]
+            for t in covered_times[1:]:
+                if t - prev > 0.1:
+                    intervals.append((start, prev))
+                    start = t
+                prev = t
+            intervals.append((start, prev))
+            missile_intervals[missile_id] = intervals
+        return missile_intervals
 
     def update_drone_velocity(self, drone_id, velocity_vector):
         self.Drones[drone_id].forward_vector = np.array(velocity_vector)
