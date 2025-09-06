@@ -65,13 +65,14 @@ def test(best_params, video=False):
             drone_id: global_sys.Drones[drone_id] for drone_id in best_params['drones']}
         targeted_missiles = {missile_id: global_sys.Missiles[missile_id]
                              for missile_id in best_params['targeted_missile_ids']}
-        
+
         best_interference_info = []
         for jammer in all_jammers:
             interference_duration, best_missile_id = __calculate_actual_interference_duration(
                 global_sys, jammer, best_params['targeted_missile_ids'])
-            best_interference_info.append((interference_duration, best_missile_id))
-        
+            best_interference_info.append(
+                (interference_duration, best_missile_id))
+
         photography(targeted_missiles, active_drones, all_jammers, global_sys.true_goal,
                     best_interference_info=best_interference_info)
 
@@ -117,7 +118,7 @@ def export_physical_parameters_to_excel(best_params, filename="output/physical_p
         "烟幕干扰弹投放点的x坐标(m)", "烟幕干扰弹投放点的y坐标(m)",
         "烟幕干扰弹投放点的z坐标(m)", "烟幕干扰弹起爆点的x坐标(m)",
         "烟幕干扰弹起爆点的y坐标(m)", "烟幕干扰弹起爆点的z坐标(m)",
-        "有效干扰时长(s)", "主要干扰导弹"
+        "投放时刻", "起爆延迟", "有效干扰时长(s)", "主要干扰导弹"
     ]
 
     for col, header in enumerate(headers, 1):
@@ -150,8 +151,10 @@ def export_physical_parameters_to_excel(best_params, filename="output/physical_p
             ws.cell(row=row, column=7, value=f"{explode_pos[0]:.2f}")
             ws.cell(row=row, column=8, value=f"{explode_pos[1]:.2f}")
             ws.cell(row=row, column=9, value=f"{explode_pos[2]:.2f}")
-            ws.cell(row=row, column=10, value=f"{actual_interference:.2f}")
-            ws.cell(row=row, column=11, value=best_missile_id)
+            ws.cell(row=row, column=10, value=f"{father_t:.2f}")
+            ws.cell(row=row, column=11, value=f"{smoke_delay:.2f}")
+            ws.cell(row=row, column=12, value=f"{actual_interference:.2f}")
+            ws.cell(row=row, column=13, value=best_missile_id)
 
             jammer_count += 1
             row += 1

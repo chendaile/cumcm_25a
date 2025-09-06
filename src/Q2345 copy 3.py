@@ -88,7 +88,7 @@ def Q5_help4():
 
 def Q5_help5():
     Lets_optimize(drone_ids=['FY5'],
-                  n_jammers=1,
+                  n_jammers=3,
                   population_size=150,
                   generations=150,
                   Qname='Q5_FY5',

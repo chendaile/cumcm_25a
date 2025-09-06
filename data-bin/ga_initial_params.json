@@ -7,15 +7,15 @@
     "jammers": [
       {
         "father_t": 0.0,
-        "smoke_delay": 3.31
+        "smoke_delay": 3.5
       },
       {
-        "father_t": 2.5,
-        "smoke_delay": 4.2
+        "father_t": 1.68,
+        "smoke_delay": 4.19
       },
       {
-        "father_t": 5.0,
-        "smoke_delay": 2.8
+        "father_t": 3.55,
+        "smoke_delay": 5.0
       }
     ]
   },
@@ -26,23 +26,23 @@
     },
     "jammers": [
       {
-        "father_t": 5,
-        "smoke_delay": 5.0
+        "father_t": 4.69,
+        "smoke_delay": 5.68
       },
       {
         "father_t": 6,
         "smoke_delay": 5
       },
       {
-        "father_t": 7,
-        "smoke_delay": 0.88
+        "father_t": 7.13,
+        "smoke_delay": 0.74
       }
     ]
   },
   "FY3": {
     "velocity": {
-      "velocity_x": 16.12,
-      "velocity_y": 139.07
+      "velocity_x": 23.42,
+      "velocity_y": 138.03
     },
     "jammers": [
       {
@@ -50,19 +50,19 @@
         "smoke_delay": 2.18
       },
       {
-        "father_t": 18.5,
-        "smoke_delay": 2.18
+        "father_t": 19.5,
+        "smoke_delay": 1.28
       },
       {
-        "father_t": 18.5,
+        "father_t": 20.5,
         "smoke_delay": 2.18
       }
     ]
   },
   "FY4": {
     "velocity": {
-      "velocity_x": 69.44,
-      "velocity_y": -121.57
+      "velocity_x": 68.97,
+      "velocity_y": -121.83
     },
     "jammers": [
       {
@@ -70,32 +70,32 @@
         "smoke_delay": 9.73
       },
       {
-        "father_t": 3.42,
-        "smoke_delay": 9.73
+        "father_t": 4.42,
+        "smoke_delay": 9.33
       },
       {
-        "father_t": 3.42,
-        "smoke_delay": 9.73
+        "father_t": 5.49,
+        "smoke_delay": 10.77
       }
     ]
   },
   "FY5": {
     "velocity": {
-      "velocity_x": 62,
-      "velocity_y": 123
+      "velocity_x": -6.56,
+      "velocity_y": 111
     },
     "jammers": [
       {
-        "father_t": 5,
-        "smoke_delay": 5
+        "father_t": 17.02,
+        "smoke_delay": 1.19
       },
       {
-        "father_t": 6,
-        "smoke_delay": 5
+        "father_t": 18.02,
+        "smoke_delay": 0
       },
       {
-        "father_t": 7,
-        "smoke_delay": 0.88
+        "father_t": 19.73,
+        "smoke_delay": 1.04
       }
     ]
   }
