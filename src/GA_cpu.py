@@ -118,9 +118,10 @@ class GeneticOptimizer:
                 velocity_x, velocity_y)
 
             jammers = []
-            for _ in range(self.n_jammers):
-                father_t = drone_params['jammers']['father_t']
-                smoke_delay = drone_params['jammers']['smoke_delay']
+            jammer_configs = drone_params['jammers']
+            for i in range(min(self.n_jammers, len(jammer_configs))):
+                father_t = jammer_configs[i]['father_t']
+                smoke_delay = jammer_configs[i]['smoke_delay']
                 father_t = max(0.0, father_t)
                 smoke_delay = max(0.0, smoke_delay)
                 jammers.append((father_t, smoke_delay))

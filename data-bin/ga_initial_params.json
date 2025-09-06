@@ -4,49 +4,99 @@
       "velocity_x": -131.61,
       "velocity_y": 0.9
     },
-    "jammers": {
-      "father_t": 0,
-      "smoke_delay": 3.31
-    }
+    "jammers": [
+      {
+        "father_t": 0.0,
+        "smoke_delay": 3.31
+      },
+      {
+        "father_t": 2.5,
+        "smoke_delay": 4.2
+      },
+      {
+        "father_t": 5.0,
+        "smoke_delay": 2.8
+      }
+    ]
   },
   "FY2": {
     "velocity": {
       "velocity_x": 62.65,
       "velocity_y": -125.2
     },
-    "jammers": {
-      "father_t": 16,
-      "smoke_delay": 5
-    }
+    "jammers": [
+      {
+        "father_t": 5.85,
+        "smoke_delay": 5.0
+      },
+      {
+        "father_t": 5,
+        "smoke_delay": 5
+      },
+      {
+        "father_t": 5,
+        "smoke_delay": 5
+      }
+    ]
   },
   "FY3": {
     "velocity": {
       "velocity_x": 21.45,
       "velocity_y": 138.35
     },
-    "jammers": {
-      "father_t": 19.41,
-      "smoke_delay": 2.98
-    }
+    "jammers": [
+      {
+        "father_t": 19.41,
+        "smoke_delay": 2.98
+      },
+      {
+        "father_t": 22.0,
+        "smoke_delay": 3.7
+      },
+      {
+        "father_t": 24.5,
+        "smoke_delay": 4.1
+      }
+    ]
   },
   "FY4": {
     "velocity": {
       "velocity_x": -115,
       "velocity_y": -25
     },
-    "jammers": {
-      "father_t": 1.35,
-      "smoke_delay": 4.1
-    }
+    "jammers": [
+      {
+        "father_t": 1.35,
+        "smoke_delay": 4.1
+      },
+      {
+        "father_t": 4.2,
+        "smoke_delay": 3.6
+      },
+      {
+        "father_t": 7.0,
+        "smoke_delay": 5.2
+      }
+    ]
   },
   "FY5": {
     "velocity": {
       "velocity_x": -95,
       "velocity_y": 35
     },
-    "jammers": {
-      "father_t": 1.05,
-      "smoke_delay": 3.9
-    }
+    "jammers": [
+      {
+        "father_t": 1.05,
+        "smoke_delay": 3.9
+      },
+      {
+        "father_t": 3.8,
+        "smoke_delay": 2.7
+      },
+      {
+        "father_t": 6.5,
+        "smoke_delay": 4.5
+      }
+    ]
   }
 }
