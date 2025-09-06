@@ -1,7 +1,6 @@
 import numpy as np
 from numba import njit
 from GA_cpu import GeneticOptimizer
-# from GA_gpu import GeneticOptimizer
 
 """Default units are m and m/s"""
 

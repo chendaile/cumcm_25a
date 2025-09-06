@@ -3,7 +3,8 @@ from Problem_object import Global_System
 from Virtualizer import virtualize_all_jammers, photography
 
 
-def optimize_single_missile(drone_ids, n_jammers, population_size, generations, Qname):
+def Lets_optimize(drone_ids, n_jammers, population_size,
+                  generations, Qname, targeted_missile_ids):
     with open("data-bin/initial_positions.json") as f:
         initial_positions = json.load(f)
     with open("data-bin/initial_drones_forward_vector.json") as f:
@@ -12,10 +13,11 @@ def optimize_single_missile(drone_ids, n_jammers, population_size, generations, 
     print("Starting optimization ")
 
     best_params = global_sys.optimize_single_missile_drone_all_jammers(
-        drone_ids, n_jammers, population_size, generations, plot_convergence=True, Qname=Qname)
+        drone_ids, n_jammers, population_size, generations,
+        plot_convergence=True, Qname=Qname, targeted_missile_ids=targeted_missile_ids)
 
     if best_params:
-        test(global_sys, best_params)
+        test(best_params)
     else:
         print("Optimization failed to find valid parameters")
 
@@ -38,11 +40,19 @@ def test(best_params, video=False):
         best_params['targeted_missile_ids'])
     cover_intervals = global_sys.get_cover_intervals_all_jammers(
         best_params['targeted_missile_ids'])
-    # print(f"\nVerification: {final_duration:.2f} seconds coverage")
-    # print(f"Coverage intervals:")
-    # for i, (start, end) in enumerate(cover_intervals):
-    #     print(
-    #         f"  Interval {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
+
+    print(f"\nVerification:")
+    print(f"Total coverage: {sum(final_duration.values()):.2f} seconds")
+    print(f"Individual missile coverage:")
+    for missile_id, duration in final_duration.items():
+        print(f"  {missile_id}: {duration:.2f} seconds")
+        intervals = cover_intervals.get(missile_id, [])
+        if intervals:
+            for i, (start, end) in enumerate(intervals):
+                print(
+                    f"    Interval {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
+        else:
+            print("    No coverage intervals")
 
     if video:
         all_jammers = []
