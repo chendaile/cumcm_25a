@@ -149,8 +149,11 @@ class GeneticOptimizer:
             for father_t, smoke_delay in drone_data[2]:
                 self.global_system.add_jammers(drone_id, father_t, smoke_delay)
 
-        missile_seconds = self.global_system.get_cover_duration(
+        # missile_seconds = self.global_system.get_cover_duration(
+        #     self.targeted_missile_ids)
+        missile_seconds = self.global_system.get_cover_seconds_all_jammers(
             self.targeted_missile_ids)
+        missile_seconds = sum(missile_seconds.values())
         return missile_seconds
 
     def crossover(self, parent1, parent2):

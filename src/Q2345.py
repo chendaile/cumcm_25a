@@ -50,6 +50,15 @@ def Q4_help3():
                   Qname='Q4_help3')
 
 
+def Q5_help1():
+    Lets_optimize(drone_ids=['FY1'],
+                  n_jammers=3,
+                  population_size=50,
+                  generations=100,
+                  Qname='Q5_FY1',
+                  targeted_missile_ids=['M1', 'M2', 'M3'])
+
+
 if __name__ == "__main__":
     # Q4_help1()
-    Q4()
+    Q5_help1()

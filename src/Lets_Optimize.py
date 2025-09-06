@@ -17,7 +17,7 @@ def Lets_optimize(drone_ids, n_jammers, population_size,
         plot_convergence=True, Qname=Qname, targeted_missile_ids=targeted_missile_ids)
 
     if best_params:
-        test(best_params)
+        test(best_params, True)
     else:
         print("Optimization failed to find valid parameters")
 
@@ -60,8 +60,9 @@ def test(best_params, video=False):
             all_jammers.extend(global_sys.jammers[drone_id])
         active_drones = {
             drone_id: global_sys.Drones[drone_id] for drone_id in best_params['drones']}
-        photography(global_sys.Missiles, active_drones,
-                    all_jammers, global_sys.true_goal)
+        targeted_missiles = {missile_id: global_sys.Missiles[missile_id] 
+                             for missile_id in best_params['targeted_missile_ids']}
+        photography(targeted_missiles, active_drones, all_jammers, global_sys.true_goal)
 
 
 if __name__ == '__main__':

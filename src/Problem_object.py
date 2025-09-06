@@ -220,7 +220,7 @@ class Global_System:
 
     def get_cover_intervals_all_jammers(self, missile_ids):
         missile_intervals = {}
-        test_times = np.arange(0, 40, 0.01)
+        test_times = np.arange(0, 25, 0.02)
 
         for missile_id in missile_ids:
             missile = self.Missiles[missile_id]
