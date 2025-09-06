@@ -66,7 +66,7 @@ def crossover_velocities(parent1_vel, parent2_vel, alpha, noise_scale):
 def crossover_jammer_params(parent1_jammer, parent2_jammer, beta):
     father_t = beta * parent1_jammer[0] + (1 - beta) * parent2_jammer[0]
     smoke_delay = beta * parent1_jammer[1] + (1 - beta) * parent2_jammer[1]
-    return (max(0.0, min(5.0, father_t)), max(0.0, min(5.0, smoke_delay)))
+    return (max(0.0, min(25, father_t)), max(0.0, min(25, smoke_delay)))
 
 
 @njit
@@ -79,9 +79,9 @@ def mutate_velocity_fast(velocity, noise_scale):
 @njit
 def mutate_jammer_fast(jammer_params, noise_t, noise_delay):
     new_father_t = max(
-        0.0, min(5.0, jammer_params[0] + np.random.normal(0, noise_t)))
+        0.0, min(25, jammer_params[0] + np.random.normal(0, noise_t)))
     new_smoke_delay = max(
-        0.0, min(5.0, jammer_params[1] + np.random.normal(0, noise_delay)))
+        0.0, min(25, jammer_params[1] + np.random.normal(0, noise_delay)))
     return (new_father_t, new_smoke_delay)
 
 
