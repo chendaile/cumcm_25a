@@ -1,4 +1,6 @@
 import json
+import numpy as np
+import openpyxl
 from Problem_object import Global_System
 from Virtualizer import virtualize_all_jammers, photography
 
@@ -18,6 +20,7 @@ def Lets_optimize(drone_ids, n_jammers, population_size,
 
     if best_params:
         test(best_params, True)
+        export_physical_parameters_to_excel(best_params)
     else:
         print("Optimization failed to find valid parameters")
 
@@ -60,9 +63,101 @@ def test(best_params, video=False):
             all_jammers.extend(global_sys.jammers[drone_id])
         active_drones = {
             drone_id: global_sys.Drones[drone_id] for drone_id in best_params['drones']}
-        targeted_missiles = {missile_id: global_sys.Missiles[missile_id] 
+        targeted_missiles = {missile_id: global_sys.Missiles[missile_id]
                              for missile_id in best_params['targeted_missile_ids']}
-        photography(targeted_missiles, active_drones, all_jammers, global_sys.true_goal)
+        
+        best_interference_info = []
+        for jammer in all_jammers:
+            interference_duration, best_missile_id = __calculate_actual_interference_duration(
+                global_sys, jammer, best_params['targeted_missile_ids'])
+            best_interference_info.append((interference_duration, best_missile_id))
+        
+        photography(targeted_missiles, active_drones, all_jammers, global_sys.true_goal,
+                    best_interference_info=best_interference_info)
+
+
+def __calculate_actual_interference_duration(global_sys, jammer, targeted_missile_ids):
+    max_interference = 0.0
+    best_missile_id = ""
+    test_times = np.arange(0, 25, 0.02)
+
+    for missile_id in targeted_missile_ids:
+        missile = global_sys.Missiles[missile_id]
+        interference_count = 0
+        for t in test_times:
+            if global_sys.detect_occlusion_single_jammer(t, missile, jammer):
+                interference_count += 1
+        missile_interference = interference_count * 0.02
+        if missile_interference > max_interference:
+            max_interference = missile_interference
+            best_missile_id = missile_id
+    return max_interference, best_missile_id
+
+
+def export_physical_parameters_to_excel(best_params, filename="output/physical_parameters.xlsx"):
+    with open("data-bin/initial_positions.json") as f:
+        initial_positions = json.load(f)
+    with open("data-bin/initial_drones_forward_vector.json") as f:
+        drones_forward_vector = json.load(f)
+    global_sys = Global_System(initial_positions, drones_forward_vector)
+
+    for drone_id, drone_data in best_params['drones'].items():
+        global_sys.reset_jammers(drone_id)
+        global_sys.update_drone_velocity(
+            drone_id, [drone_data[0], drone_data[1], 0])
+        for father_t, smoke_delay in drone_data[2]:
+            global_sys.add_jammers(drone_id, father_t, smoke_delay)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "物理参数"
+
+    headers = [
+        "烟幕干扰弹编号", "无人机运动方向", "无人机运动速度(m/s)",
+        "烟幕干扰弹投放点的x坐标(m)", "烟幕干扰弹投放点的y坐标(m)",
+        "烟幕干扰弹投放点的z坐标(m)", "烟幕干扰弹起爆点的x坐标(m)",
+        "烟幕干扰弹起爆点的y坐标(m)", "烟幕干扰弹起爆点的z坐标(m)",
+        "有效干扰时长(s)", "主要干扰导弹"
+    ]
+
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+
+    jammer_count = 1
+    row = 2
+
+    for drone_id in best_params['drones']:
+        drone_data = best_params['drones'][drone_id]
+        velocity_magnitude = (drone_data[0]**2 + drone_data[1]**2)**0.5
+        direction_angle = np.degrees(np.arctan2(drone_data[1], drone_data[0]))
+
+        for father_t, smoke_delay in drone_data[2]:
+            drone_obj = global_sys.Drones[drone_id]
+            jammer_obj = drone_obj.create_jammer(father_t, smoke_delay)
+
+            release_pos = jammer_obj.release_point
+            explode_pos = jammer_obj.smoke.release_point
+
+            actual_interference, best_missile_id = __calculate_actual_interference_duration(
+                global_sys, jammer_obj, best_params['targeted_missile_ids'])
+
+            ws.cell(row=row, column=1, value=jammer_count)
+            ws.cell(row=row, column=2, value=f"{direction_angle:.1f}°")
+            ws.cell(row=row, column=3, value=f"{velocity_magnitude:.2f}")
+            ws.cell(row=row, column=4, value=f"{release_pos[0]:.2f}")
+            ws.cell(row=row, column=5, value=f"{release_pos[1]:.2f}")
+            ws.cell(row=row, column=6, value=f"{release_pos[2]:.2f}")
+            ws.cell(row=row, column=7, value=f"{explode_pos[0]:.2f}")
+            ws.cell(row=row, column=8, value=f"{explode_pos[1]:.2f}")
+            ws.cell(row=row, column=9, value=f"{explode_pos[2]:.2f}")
+            ws.cell(row=row, column=10, value=f"{actual_interference:.2f}")
+            ws.cell(row=row, column=11, value=best_missile_id)
+
+            jammer_count += 1
+            row += 1
+
+    wb.save(filename)
+    print(f"物理参数已保存到 {filename}")
 
 
 if __name__ == '__main__':

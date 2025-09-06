@@ -367,7 +367,7 @@ class GeneticOptimizer:
         missile_seconds = self.global_system.get_cover_seconds_all_jammers(
             self.targeted_missile_ids)
 
-        with open(f'output/optimization_results_{self.Qname}.txt', 'a', encoding='utf-8') as f:
+        with open(f'output/log/optimization_results_{self.Qname}.txt', 'a', encoding='utf-8') as f:
             f.write(f"优化结果 - {timestamp}\n")
             f.write(f"总覆盖时长: {result['duration']:.3f}秒\n")
 

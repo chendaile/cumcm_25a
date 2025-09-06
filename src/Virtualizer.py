@@ -6,7 +6,7 @@ matplotlib.use('Agg')
 
 
 def virtualize_all_jammers(global_t, missiles: dict, drones,
-                           jammers, true_goal,
+                           jammers, true_goal, best_interference_info=None,
                            save_only=False, save_path=None):
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
@@ -55,32 +55,36 @@ def virtualize_all_jammers(global_t, missiles: dict, drones,
             ax.text(smoke_pos[0]+50, smoke_pos[1], smoke_pos[2]-150, f'S{i+1}',
                     fontsize=10, color='orange', fontweight='bold')
 
-            missile_to_smoke = smoke_pos - missile_pos
-            smoke_distance = np.linalg.norm(missile_to_smoke)
+            target_missile_id = None
+            if best_interference_info and i < len(best_interference_info):
+                target_missile_id = best_interference_info[i][1]
+            
+            if target_missile_id and target_missile_id in missiles:
+                target_missile_pos = missiles[target_missile_id].get_pos(global_t)
+                missile_to_smoke = smoke_pos - target_missile_pos
+                smoke_distance = np.linalg.norm(missile_to_smoke)
 
-            if smoke_distance > jammer.smoke.radius:
-                missile_to_smoke_unit = missile_to_smoke / smoke_distance
+                if smoke_distance > jammer.smoke.radius:
+                    missile_to_smoke_unit = missile_to_smoke / smoke_distance
 
-                perp1 = np.array([1, 0, 0]) if abs(
-                    missile_to_smoke_unit[0]) < 0.9 else np.array([0, 1, 0])
-                perp1 = perp1 - \
-                    np.dot(perp1, missile_to_smoke_unit) * \
-                    missile_to_smoke_unit
-                perp1 = perp1 / np.linalg.norm(perp1)
-                perp2 = np.cross(missile_to_smoke_unit, perp1)
+                    perp1 = np.array([1, 0, 0]) if abs(
+                        missile_to_smoke_unit[0]) < 0.9 else np.array([0, 1, 0])
+                    perp1 = perp1 - \
+                        np.dot(perp1, missile_to_smoke_unit) * \
+                        missile_to_smoke_unit
+                    perp1 = perp1 / np.linalg.norm(perp1)
+                    perp2 = np.cross(missile_to_smoke_unit, perp1)
 
-                sin_alpha = jammer.smoke.radius / smoke_distance
-                cos_alpha = np.sqrt(1 - sin_alpha**2)
+                    sin_alpha = jammer.smoke.radius / smoke_distance
+                    cos_alpha = np.sqrt(1 - sin_alpha**2)
 
-                cone_points = []
-                cone_theta = np.linspace(0, 2*np.pi, 150)
-                for theta_val in cone_theta:
-                    tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
-                        (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
-                    cone_end = missile_pos + 25000 * tangent_dir
-                    cone_points.append(cone_end)
-                    ax.plot([missile_pos[0], cone_end[0]], [missile_pos[1], cone_end[1]], [
-                            missile_pos[2], cone_end[2]], color='red', alpha=0.2, linewidth=0.5)
+                    cone_theta = np.linspace(0, 2*np.pi, 150)
+                    for theta_val in cone_theta:
+                        tangent_dir = cos_alpha * missile_to_smoke_unit + sin_alpha * \
+                            (np.cos(theta_val) * perp1 + np.sin(theta_val) * perp2)
+                        cone_end = target_missile_pos + 25000 * tangent_dir
+                        ax.plot([target_missile_pos[0], cone_end[0]], [target_missile_pos[1], cone_end[1]], [
+                                target_missile_pos[2], cone_end[2]], color='red', alpha=0.3, linewidth=0.8)
 
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
@@ -109,7 +113,8 @@ def virtualize_all_jammers(global_t, missiles: dict, drones,
 
 
 def photography(missiles: dict, drones, jammers, true_goal,
-                time_start=5, time_end=25.0, fps=5, output_dir='tmp/frames'):
+                time_start=5, time_end=25.0, fps=5, output_dir='tmp/frames',
+                best_interference_info=None):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     dt = 1.0 / fps
@@ -118,7 +123,7 @@ def photography(missiles: dict, drones, jammers, true_goal,
     print(f"开始摄影: {time_start}s - {time_end}s, {fps}fps, 共{total_frames}帧")
     for i, global_t in enumerate(time_points):
         frame_filename = f'{output_dir}/frame_{i:04d}_t_{global_t:.2f}s.png'
-        virtualize_all_jammers(global_t, missiles, drones, jammers, true_goal,
+        virtualize_all_jammers(global_t, missiles, drones, jammers, true_goal, best_interference_info,
                                save_only=True, save_path=frame_filename)
         if (i + 1) % (fps * 2) == 0:
             progress = (i + 1) / total_frames * 100
