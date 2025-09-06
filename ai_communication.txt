@@ -161,5 +161,5 @@ GPU问题仍存在，最终禁用GPU加速使用CPU计算确保稳定性。
 回答: 已创建两个版本：1.GA_cpu.py：完全CPU优化版本，使用njit加速核心计算；2.GA_gpu.py：完全GPU版本，包含GPU核函数进行批量交叉、变异和多样性计算，支持GPU并行加速。GPU版本在大种群时性能显著提升。
 ---
 问题: 我要把代码拓展到适配多个missile的程度,也就是说你需要改动get_cover_intervals_all_jammers方法,我需要返回每个导弹的各自的覆盖时间
-回答: 已修改支持多导弹：1.修改get_cover_intervals_all_jammers和get_cover_seconds_all_jammers方法，现在需要传入missile_ids列表参数；2.修改Problem_object.py中导弹初始化，从只支持M1改为支持所有missiles键；3.GA_cpu.py的evaluate_individual返回多导弹总覆盖时长，save_result_to_file输出每个导弹的详细覆盖情况；4.新增write_to_excel函数导出Excel格式结果；5.生成详细的LaTeX算法文档；6.修正Optimize_single_missile.py中的注释代码和参数拼写错误。
+回答: 已修改支持多导弹：1.修改get_cover_intervals_all_jammers和get_cover_seconds_all_jammers方法，现在需要传入missile_ids列表参数；2.修改Problem_object.py中导弹初始化，从只支持M1改为支持所有missiles键；3.GA_cpu.py的evaluate_individual返回多导弹总覆盖时长，save_result_to_file输出每个导弹的详细覆盖情况；4.新增write_to_excel函数导出Excel格式结果；5.生成详细的LaTeX算法文档；6.修正Optimize_single_missile.py中的注释代码和参数拼写错误；7.添加多线程并行化优化，充分利用CPU资源；8.实现merge_intervals函数计算所有导弹同时被遮挡的时间区间交集。
 ---

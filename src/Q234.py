@@ -22,7 +22,8 @@ def Q4():
                   n_jammers=1,
                   population_size=150,
                   generations=5,
-                  Qname='Q4')
+                  Qname='Q4',
+                  targeted_missile_ids=['M1'])
 
 
 def Q4_help1():

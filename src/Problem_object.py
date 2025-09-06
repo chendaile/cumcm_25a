@@ -181,6 +181,43 @@ class Global_System:
                     end - start for start, end in missile_intervals)
         return missile_seconds
 
+    def merge_intervals(self, missile_ids=None):
+        if missile_ids is None:
+            missile_ids = list(self.Missiles.keys())
+        if not missile_ids:
+            return []
+        all_intervals = self.get_cover_intervals_all_jammers(missile_ids)
+        for missile_id in missile_ids:
+            if not all_intervals.get(missile_id):
+                return []
+        result = all_intervals[missile_ids[0]]
+        for missile_id in missile_ids[1:]:
+            result = self._intersect_intervals(
+                result, all_intervals[missile_id])
+            if not result:
+                return []
+        return result
+
+    def _intersect_intervals(self, intervals1, intervals2):
+        if not intervals1 or not intervals2:
+            return []
+        result, i, j = [], 0, 0
+        while i < len(intervals1) and j < len(intervals2):
+            start1, end1 = intervals1[i]
+            start2, end2 = intervals2[j]
+            overlap_start, overlap_end = max(start1, start2), min(end1, end2)
+            if overlap_start < overlap_end:
+                result.append((overlap_start, overlap_end))
+            if end1 <= end2:
+                i += 1
+            else:
+                j += 1
+        return result
+
+    def get_cover_duration(self, missile_ids=None):
+        intervals = self.merge_intervals(missile_ids)
+        return sum(end - start for start, end in intervals) if intervals else 0.0
+
     def get_cover_intervals_all_jammers(self, missile_ids):
         missile_intervals = {}
         test_times = np.arange(0, 40, 0.01)
