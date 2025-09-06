@@ -104,8 +104,6 @@ class Drone:
 
 
 class Global_System:
-    """Single messile and single drone"""
-
     def __init__(self, initial_positions: dict, drones_forward_vector: dict):
         self.Drones = {}
         self.jammers = {}
@@ -229,7 +227,8 @@ class Global_System:
 
     def optimize_single_missile_drone_all_jammers(self, drone_ids, n_jammers,
                                                   population_size,
-                                                  generations, plot_convergence, Qname):
+                                                  generations, plot_convergence,
+                                                  Qname, targeted_missile_ids):
         optimizer = GeneticOptimizer(
-            self, drone_ids, n_jammers, population_size, generations, Qname)
+            self, drone_ids, n_jammers, population_size, generations, Qname, targeted_missile_ids)
         return optimizer.optimize(plot_convergence)

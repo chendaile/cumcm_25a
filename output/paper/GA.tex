@@ -1,0 +1,259 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{a4paper,margin=2cm}
+\usepackage[utf8]{inputenc}
+\usepackage{ctex}
+
+\title{基于遗传算法的烟幕干扰弹投放策略优化}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{遗传算法总体设计}
+
+本研究采用遗传算法（Genetic Algorithm, GA）解决烟幕干扰弹投放策略优化问题。该算法旨在最大化多个导弹的总遮蔽时间，通过优化无人机飞行参数和干扰弹投放策略，实现最优的防御效果。
+
+\subsection{问题编码}
+
+每个个体（candidate solution）表示一个完整的投放策略，编码结构如下：
+
+\begin{align}
+Individual = \{DroneID_1: [v_x, v_y, [(t_1, d_1), (t_2, d_2), ...]], ...DroneID_n\}
+\end{align}
+
+其中：
+\begin{itemize}
+    \item $v_x, v_y$：无人机在x、y方向的速度分量（m/s）
+    \item $t_i$：第i个干扰弹的投放时间（s）
+    \item $d_i$：第i个干扰弹的烟雾起爆延迟（s）
+    \item 速度约束：$70 \leq \sqrt{v_x^2 + v_y^2} \leq 140$ m/s
+\end{itemize}
+
+\section{核心算法组件}
+
+\subsection{初始化策略}
+
+个体初始化函数\texttt{create\_individual()}采用随机生成策略：
+
+\begin{algorithm}[H]
+\caption{个体初始化算法}
+\begin{algorithmic}[1]
+\FOR{each $drone\_id$ in drone\_ids}
+    \STATE 随机生成速度角度 $\theta \in [0, 2\pi)$
+    \STATE 随机生成速度大小 $v \in [70, 140]$
+    \STATE 计算速度分量：$v_x = v \cos(\theta)$, $v_y = v \sin(\theta)$
+    \FOR{$i = 1$ to $n\_jammers$}
+        \STATE 生成投放时间：$t_i \in [0, 10]$
+        \STATE 生成起爆延迟：$d_i \in [0.1, 10]$
+    \ENDFOR
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{适应度评估}
+
+适应度函数\texttt{evaluate\_individual()}计算个体的总遮蔽时间：
+
+\begin{align}
+fitness(individual) = \sum_{missile\_id \in targeted\_missiles} CoverTime(missile\_id)
+\end{align}
+
+评估流程：
+\begin{enumerate}
+    \item 重置所有无人机的干扰弹配置
+    \item 根据个体参数配置无人机速度和干扰弹投放策略
+    \item 调用物理仿真系统计算各导弹的遮蔽时间
+    \item 返回总遮蔽时间作为适应度值
+\end{enumerate}
+
+\subsection{交叉算子}
+
+采用混合交叉策略\texttt{crossover()}：
+
+\textbf{速度交叉：}
+\begin{align}
+v_{child} = \alpha \cdot v_{parent1} + (1-\alpha) \cdot v_{parent2}
+\end{align}
+其中$\alpha \in [0.3, 0.7]$为随机权重。
+
+\textbf{干扰弹参数交叉：}
+对每个干扰弹参数$(t_i, d_i)$，随机选择来自parent1或parent2的参数对。
+
+\subsection{变异算子}
+
+实现自适应变异策略\texttt{adaptive\_mutate()}：
+
+\begin{align}
+mutation\_rate = base\_rate \cdot (1 + stagnation\_factor)
+\end{align}
+
+\begin{align}
+noise\_scale = initial\_scale \cdot \exp(-decay\_factor \cdot generation)
+\end{align}
+
+变异操作：
+\begin{itemize}
+    \item \textbf{速度变异：}添加高斯噪声后应用速度约束
+    \item \textbf{投放时间变异：}在$[0, 10]$范围内添加噪声
+    \item \textbf{起爆延迟变异：}在$[0.1, 10]$范围内添加噪声
+\end{itemize}
+
+\subsection{选择策略}
+
+采用锦标赛选择\texttt{tournament\_selection()}：
+
+\begin{algorithm}[H]
+\caption{锦标赛选择算法}
+\begin{algorithmic}[1]
+\STATE 随机选择$tournament\_size$个个体
+\STATE 返回其中适应度最高的个体
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{种群多样性保持}
+
+\subsubsection{多样性计算}
+基于速度向量的欧几里得距离计算种群多样性：
+
+\begin{align}
+Diversity = \frac{1}{N(N-1)/2} \sum_{i<j} \sqrt{\sum_{drone}(v_{i,drone} - v_{j,drone})^2}
+\end{align}
+
+\subsubsection{种群重启机制}
+当算法停滞时（连续多代无改进），触发种群重启：
+\begin{itemize}
+    \item 保留当前最佳个体
+    \item 重新随机初始化其余个体
+    \item 重置停滞计数器
+\end{itemize}
+
+\section{优化算法流程}
+
+\begin{algorithm}[H]
+\caption{主优化算法}
+\begin{algorithmic}[1]
+\STATE 初始化种群$P_0$
+\STATE $best\_fitness = 0$, $stagnation\_count = 0$
+\FOR{$generation = 1$ to $max\_generations$}
+    \STATE 评估所有个体适应度
+    \STATE 更新最佳个体和适应度
+    \IF{$current\_best > best\_fitness$}
+        \STATE $best\_fitness = current\_best$
+        \STATE $stagnation\_count = 0$
+    \ELSE
+        \STATE $stagnation\_count++$
+    \ENDIF
+    
+    \IF{$stagnation\_count > threshold$}
+        \STATE 执行种群重启
+    \ENDIF
+    
+    \STATE 计算种群多样性
+    
+    \FOR{$i = 1$ to $population\_size$}
+        \STATE $parent1 = tournament\_selection(P)$
+        \STATE $parent2 = tournament\_selection(P)$
+        \STATE $child = crossover(parent1, parent2)$
+        \STATE $child = adaptive\_mutate(child, generation)$
+        \STATE $child = repair\_individual(child)$
+        \STATE $P_{new}[i] = child$
+    \ENDFOR
+    
+    \STATE 精英保留：保持最佳个体到新种群
+    \STATE $P = P_{new}$
+\ENDFOR
+\RETURN 最佳个体及其适应度
+\end{algorithmic}
+\end{algorithm}
+
+\section{约束处理}
+
+\subsection{速度约束}
+使用\texttt{apply\_velocity\_constraints()}函数确保速度在$[70, 140]$ m/s范围内：
+
+\begin{align}
+v_{new} = \begin{cases}
+\frac{70}{\|v\|} \cdot v & \text{if } \|v\| < 70 \\
+\frac{140}{\|v\|} \cdot v & \text{if } \|v\| > 140 \\
+v & \text{otherwise}
+\end{cases}
+\end{align}
+
+\subsection{时间约束}
+\texttt{repair\_jammers\_timing()}函数确保同一无人机的干扰弹投放时间间隔不少于1秒：
+
+\begin{align}
+t_i = \max(t_i, t_{i-1} + 1.0) \quad \text{for sorted } t_i
+\end{align}
+
+\section{算法参数设置}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|}
+\hline
+参数 & 值 \\
+\hline
+种群大小 & 100 \\
+最大代数 & 500 \\
+锦标赛大小 & 3 \\
+基础变异率 & 0.1 \\
+精英保留比例 & 0.1 \\
+停滞阈值 & 50代 \\
+速度范围 & [70, 140] m/s \\
+投放时间范围 & [0, 10] s \\
+起爆延迟范围 & [0.1, 10] s \\
+\hline
+\end{tabular}
+\caption{遗传算法参数设置}
+\end{table}
+
+\section{性能优化}
+
+\subsection{数值计算优化}
+使用Numba的\texttt{@njit}装饰器加速核心数值计算：
+\begin{itemize}
+    \item 多样性计算函数
+    \item 速度约束应用
+    \item 时间修复算法
+    \item 交叉和变异的数值操作
+\end{itemize}
+
+\subsection{收敛性分析}
+算法提供收敛可视化功能，实时监控：
+\begin{itemize}
+    \item 最佳适应度变化曲线
+    \item 平均适应度变化曲线
+    \item 种群多样性变化曲线
+\end{itemize}
+
+\section{算法特点与创新}
+
+\begin{enumerate}
+    \item \textbf{多目标适应度：}同时优化多个导弹的遮蔽效果
+    \item \textbf{自适应机制：}变异率和噪声强度随代数自适应调整
+    \item \textbf{多样性保持：}通过种群重启防止早熟收敛
+    \item \textbf{约束修复：}确保所有解满足物理和工程约束
+    \item \textbf{精英策略：}保证算法收敛性和解的质量
+    \item \textbf{高效实现：}结合Numba加速和并行化设计
+\end{enumerate}
+
+\section{结果输出}
+
+算法提供多种结果输出格式：
+\begin{itemize}
+    \item 文本格式详细报告（包含各导弹遮蔽时间间隔）
+    \item Excel表格（标准化投放策略参数）
+    \item 收敛过程可视化图表
+\end{itemize}
+
+该遗传算法通过精心设计的编码方式、约束处理机制和自适应策略，能够有效求解复杂的烟幕干扰弹投放优化问题，为实际防御系统提供可行的解决方案。
+
+\end{document}

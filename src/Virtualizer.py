@@ -5,25 +5,20 @@ import matplotlib
 matplotlib.use('Agg')
 
 
-def virtualize_single_jammer(global_t, missile, drone, jammer, true_goal):
-    """原单个干扰弹可视化函数，保持向后兼容性"""
-    jammers = [jammer] if jammer else []
-    virtualize_all_jammers(global_t, missile, drone, jammers, true_goal)
-
-
-def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_only=False, save_path=None):
-    """可视化所有干扰弹的函数"""
-
+def virtualize_all_jammers(global_t, missiles: dict, drones,
+                           jammers, true_goal,
+                           save_only=False, save_path=None):
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
 
-    missile_pos = missile.get_pos(global_t)
+    for missile_id, missile in missiles.items():
+        missile_pos = missile.get_pos(global_t)
+        ax.scatter(*missile_pos, color='b', s=60,
+                   label=missile_id + ' Missile')
+        ax.text(missile_pos[0], missile_pos[1], missile_pos[2], missile_id,
+                fontsize=10, color='b', fontweight='bold')
+
     target_pos = true_goal.bottom_center_pos
-
-    ax.scatter(*missile_pos, color='b', s=60, label='M1 Missile')
-    ax.text(missile_pos[0], missile_pos[1], missile_pos[2], '  M1',
-            fontsize=10, color='b', fontweight='bold')
-
     ax.scatter(*target_pos, color='green', s=50, label='True Target')
     ax.text(target_pos[0], target_pos[1], target_pos[2], '  Target',
             fontsize=10, color='green', fontweight='bold')
@@ -113,7 +108,8 @@ def virtualize_all_jammers(global_t, missile, drones, jammers, true_goal, save_o
         plt.show()
 
 
-def photography(missile, drones, jammers, true_goal, time_start=5, time_end=25.0, fps=5, output_dir='tmp/frames'):
+def photography(missiles: dict, drones, jammers, true_goal,
+                time_start=5, time_end=25.0, fps=5, output_dir='tmp/frames'):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     dt = 1.0 / fps
@@ -122,7 +118,7 @@ def photography(missile, drones, jammers, true_goal, time_start=5, time_end=25.0
     print(f"开始摄影: {time_start}s - {time_end}s, {fps}fps, 共{total_frames}帧")
     for i, global_t in enumerate(time_points):
         frame_filename = f'{output_dir}/frame_{i:04d}_t_{global_t:.2f}s.png'
-        virtualize_all_jammers(global_t, missile, drones, jammers, true_goal,
+        virtualize_all_jammers(global_t, missiles, drones, jammers, true_goal,
                                save_only=True, save_path=frame_filename)
         if (i + 1) % (fps * 2) == 0:
             progress = (i + 1) / total_frames * 100

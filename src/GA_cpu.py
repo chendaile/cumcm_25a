@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import random
 import json
 from numba import njit
+import openpyxl
 
 
 @njit
@@ -342,7 +343,8 @@ class GeneticOptimizer:
         if self.best_individual:
             result = {
                 'drones': self.best_individual,
-                'duration': self.best_fitness
+                'duration': self.best_fitness,
+                'targeted_missile_id': self.targeted_missile_ids
             }
 
             self.save_result_to_file(result)
