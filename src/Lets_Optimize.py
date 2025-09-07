@@ -164,13 +164,21 @@ def export_physical_parameters_to_excel(best_params, filename="output/physical_p
 
 
 if __name__ == '__main__':
+    # best_params = {
+    #     'drones': {
+    #         "FY1": [-132.53, 1.58, [(0.0, 2.77), (3.58, 5.54), (4.58, 7.58)]],
+    #         "FY2": [65.92, -122.14, [(4.40, 3.36), (5.94, 4.51), (7.75, 1.59)]],
+    #         "FY3": [23.64, 137.99, [(18.42, 2.22), (19.50, 1.28), (20.55, 0.21)]],
+    #         "FY4": [66.38, -123.25, [(3.42, 9.73), (4.42, 9.33), (6.30, 11.13)]],
+    #         "FY5": [-6.56, 111, [(16.99, 1.07), (18.04, 0.0), (20.33, 4.2)]]
+    #     },
+    #     'targeted_missile_ids': ['M1', 'M2', 'M3']
+    # }
     best_params = {
         'drones': {
-            "FY1": [-126.61, 2.67, [(0.0, 3.31)]],
-            "FY2": [33.38, -66.21, [(16, 5)]],
-            "FY1": [20.43, 137.94, [(19.55, 2.89)]]
+            "FY1": [-133.21, 2.87, [(0.0, 3.50)]]
         },
         'targeted_missile_ids': ['M1']
     }
-    test(best_params, video=True)
-    # export_physical_parameters_to_excel(best_params)
+    # test(best_params, video=True)
+    export_physical_parameters_to_excel(best_params)
