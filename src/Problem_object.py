@@ -61,9 +61,9 @@ class Jammer():
             raise ValueError("operate_t must be positive")
         pos = self.release_point + 1/2 * self.Gravity * operate_t**2 + \
             self.forward_vector * operate_t
-        if pos[2] < 0:
-            # raise ValueError("Jammers shouldn't be underground.")
-            pos[2] = 0
+        # if pos[2] < 0:
+        #     # raise ValueError("Jammers shouldn't be underground.")
+        #     pos[2] = 0
         return pos
 
 
@@ -81,9 +81,9 @@ class Smoke:
         if operate_t < 0:
             raise ValueError("operate_t must be positive")
         pos = self.release_point + operate_t * self.forward_vector
-        if pos[2] < 0:
-            # raise ValueError("Smoke shouldn't be underground.")
-            pos[2] = 0
+        # if pos[2] < 0:
+        #     # raise ValueError("Smoke shouldn't be underground.")
+        #     pos[2] = 0
         return pos
 
 
@@ -222,7 +222,7 @@ class Global_System:
 
     def get_cover_intervals_all_jammers(self, missile_ids):
         missile_intervals = {}
-        test_times = np.arange(0, 25, 0.02)
+        test_times = np.arange(0, 30, 0.02)
 
         for missile_id in missile_ids:
             missile = self.Missiles[missile_id]

@@ -80,7 +80,7 @@ def test(best_params, video=False):
 def __calculate_actual_interference_duration(global_sys, jammer, targeted_missile_ids):
     max_interference = 0.0
     best_missile_id = ""
-    test_times = np.arange(0, 25, 0.02)
+    test_times = np.arange(0, 30, 0.02)
 
     for missile_id in targeted_missile_ids:
         missile = global_sys.Missiles[missile_id]
@@ -166,11 +166,9 @@ def export_physical_parameters_to_excel(best_params, filename="output/physical_p
 if __name__ == '__main__':
     best_params = {
         'drones': {
-            "FY1": [79.95, 13.10, [(0.08, 0.75)]],
-            "FY2": [59.97, -106.31, [(8.61, 4.45)]],
-            "FY1": [5.78, 73.28, [(16.87, 7.57)]],
-
+            "FY1": [-131.67, 0.92, [(0.0, 3.56), (3.26, 4.87), (5.19, 5.71)]]
         },
         'targeted_missile_ids': ['M1']
     }
     test(best_params, video=True)
+    # export_physical_parameters_to_excel(best_params)

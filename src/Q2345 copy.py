@@ -99,7 +99,7 @@ def Q5_help5():
 def Q5():
     Lets_optimize(drone_ids=['FY1', 'FY2', 'FY3', 'FY4', 'FY5'],
                   n_jammers=3,
-                  population_size=800,
+                  population_size=500,
                   generations=150,
                   Qname='Q5',
                   targeted_missile_ids=['M1', 'M2', 'M3'])
