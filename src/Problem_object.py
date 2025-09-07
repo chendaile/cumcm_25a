@@ -1,6 +1,6 @@
 import numpy as np
 from numba import njit
-from GA_cpu import GeneticOptimizer
+from GA_fastest import GeneticOptimizer
 
 """Default units are m and m/s"""
 
@@ -62,7 +62,8 @@ class Jammer():
         pos = self.release_point + 1/2 * self.Gravity * operate_t**2 + \
             self.forward_vector * operate_t
         if pos[2] < 0:
-            raise ValueError("Jammers shouldn't be underground.")
+            # raise ValueError("Jammers shouldn't be underground.")
+            pos[2] = 0
         return pos
 
 
@@ -81,7 +82,8 @@ class Smoke:
             raise ValueError("operate_t must be positive")
         pos = self.release_point + operate_t * self.forward_vector
         if pos[2] < 0:
-            raise ValueError("Smoke shouldn't be underground.")
+            # raise ValueError("Smoke shouldn't be underground.")
+            pos[2] = 0
         return pos
 
 
