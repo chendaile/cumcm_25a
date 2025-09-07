@@ -19,7 +19,7 @@ def Lets_optimize(drone_ids, n_jammers, population_size,
         plot_convergence=True, Qname=Qname, targeted_missile_ids=targeted_missile_ids)
 
     if best_params:
-        test(best_params, True)
+        test(best_params, False)
         export_physical_parameters_to_excel(best_params)
     else:
         print("Optimization failed to find valid parameters")
