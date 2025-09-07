@@ -4,9 +4,10 @@ from Lets_Optimize import Lets_optimize
 def Q2():
     Lets_optimize(drone_ids=['FY1'],
                   n_jammers=1,
-                  population_size=60,
-                  generations=200,
-                  Qname='Q2')
+                  population_size=1000,
+                  generations=100,
+                  Qname='Q2',
+                  targeted_missile_ids=['M1'])
 
 
 def Q3():
@@ -109,4 +110,4 @@ if __name__ == "__main__":
     # Q5_help2()
     # Q5_help3()
     # Q5_help4()
-    Q4()
+    Q2()
