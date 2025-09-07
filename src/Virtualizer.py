@@ -58,9 +58,10 @@ def virtualize_all_jammers(global_t, missiles: dict, drones,
             target_missile_id = None
             if best_interference_info and i < len(best_interference_info):
                 target_missile_id = best_interference_info[i][1]
-            
+
             if target_missile_id and target_missile_id in missiles:
-                target_missile_pos = missiles[target_missile_id].get_pos(global_t)
+                target_missile_pos = missiles[target_missile_id].get_pos(
+                    global_t)
                 missile_to_smoke = smoke_pos - target_missile_pos
                 smoke_distance = np.linalg.norm(missile_to_smoke)
 
@@ -113,7 +114,7 @@ def virtualize_all_jammers(global_t, missiles: dict, drones,
 
 
 def photography(missiles: dict, drones, jammers, true_goal,
-                time_start=5, time_end=25.0, fps=5, output_dir='tmp/frames',
+                time_start=0, time_end=25.0, fps=5, output_dir='tmp/frames',
                 best_interference_info=None):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)

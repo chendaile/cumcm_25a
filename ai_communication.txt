@@ -200,4 +200,44 @@ GPU问题仍存在，最终禁用GPU加速使用CPU计算确保稳定性。
 
 **提升效果**：
 预计性能提升5-8倍，缓存命中率可达70%以上。可直接替换原GA_cpu.py使用。
+
+问题: 修复GA_fastest.py中matplotlib fill_between函数的IndexError
+回答: 已修复IndexError问题。主要解决了数组长度不匹配、fill_between索引错误、改进点标记越界、缓存比率绘图和变异强度绘图的数组处理问题。现在可视化代码能正确处理边界情况和数组维度不匹配问题。
+
+问题: fill_between函数IndexError - 0维数组索引错误
+回答: 已修复0维数组索引问题。添加了try-catch保护、显式列表转换和多重验证来处理matplotlib fill_between函数的数组维度问题。
+
+问题: 画图代码里面全设置为英文
+回答: 已将所有可视化代码中的中文标签改为英文，包括图表标题、坐标轴标签、图例和统计摘要文本。
+
+问题: 在图例optimization summary中添加总运行时间和CPU型号
+回答: 已添加总运行时间跟踪和CPU信息显示。在optimize方法开始记录时间，使用platform.processor()获取CPU型号，并在可视化汇总中显示"Total Runtime"和"CPU"信息。
+
+问题: 为什么mutation intensity没有在restart的时候增加
+回答: 修复了时序问题。原因是变异强度在_restart_population中增加，但记录在evolve_generation_vectorized调用之前。现在已调整记录时机并在重启方法中正确增加变异强度，图表会显示重启时的强度跳跃。
+
+问题: CPU型号显示错误,应该显示真实的AMD Ryzen 7 8845H而不是x64架构信息,还要加上16GB内存信息
+回答: 已改进硬件信息获取。现在从/proc/cpuinfo读取真实CPU型号(AMD Ryzen 7 8845H),从/proc/meminfo获取内存信息(15GB RAM)。优化摘要现在显示准确的硬件配置而不是通用架构信息。
+
+问题: restart analysis子图里面stagnation count为0不等于restart标记
+回答: 已修正重启点检测逻辑。原来错误地标记所有stagnation count为0的点，现在只标记真正的重启点：前一代达到阈值且当前代重置为0的时刻。
+
+问题: 重启点标记逻辑修复后没有显示任何重启点
+回答: 已修复重启点追踪问题。原来依赖stagnation_history模式推断重启点不准确，现在直接在evolve_generation_vectorized中记录重启事件，使用专门的restart_generations列表精确标记重启发生的代数。
+
+问题: 重启点应该标记但没有标注
+回答: 已修复重启标记逻辑。问题是stagnation_counter在重启时被重置为0，但记录是在重启后进行。现在重启时记录阈值而非0，并用restart_generations准确标记重启发生的代数。
+
+问题: 重启标记点位置不对,应该标记在stagnation count下降的拐点处
+回答: 已修正重启点标记位置。现在红色X标记显示在y=stagnation_threshold阈值线上，准确表示重启发生的拐点，而不是在y=0位置。
+
+问题: 重启标记应该在stagnation count下降后的底部拐点,不是顶部
+回答: 已修正标记位置。现在红色X标记显示在重启后下一代的y=0位置，即下降后的底部拐点，正确显示重启完成后stagnation count重置的位置。
+
+问题: ax1.legend位置改成右上角往下一点点
+回答: 已调整图例位置为loc=(0.65, 0.75)，使图例显示在右上角稍微往下的位置。
+
+问题: 子图3中文标签改为英文
+回答: 已将子图3所有中文标签改为英文，包括图例、坐标轴标签和标题。同时保持了重启点标记逻辑和数组验证功能。
+---
 ---

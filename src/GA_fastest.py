@@ -10,6 +10,8 @@ from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 import hashlib
 import gc
+import platform
+import time
 
 
 @njit
@@ -153,7 +155,8 @@ class GeneticOptimizer:
         self.stagnation_threshold = max(15, generations // 20)
         self.mutation_intensity = 1.0
 
-        print(f"最快GA版本 - {self.n_processes}进程并行 + 缓存 + 向量化")
+        print(
+            f"Fastest GA version - {self.n_processes} processes + cache + vectorization")
 
     def _hash_individual(self, velocities, jammers):
         combined = np.concatenate([velocities.flatten(), jammers.flatten()])
@@ -306,7 +309,7 @@ class GeneticOptimizer:
 
         if self.stagnation_counter >= self.stagnation_threshold:
             self._restart_population()
-            return avg_fitness
+            return avg_fitness, True  # 返回重启标志
 
         sorted_indices = np.argsort(fitnesses)[::-1]
         elite_size = max(2, self.population_size // 10)
@@ -381,8 +384,8 @@ class GeneticOptimizer:
 
         apply_velocity_constraints_vectorized(self.population_velocities)
         repair_jammers_timing_vectorized(self.population_jammers)
-        
-        return avg_fitness
+
+        return avg_fitness, False  # 没有重启
 
     def _restart_population(self):
         print(
@@ -412,6 +415,7 @@ class GeneticOptimizer:
         self.mutation_intensity = min(2.0, self.mutation_intensity * 1.3)
 
     def optimize(self, plot_convergence=False):
+        optimization_start = time.time()
         self.initialize_population_vectorized()
 
         # 收集详细统计信息
@@ -422,14 +426,22 @@ class GeneticOptimizer:
         mutation_intensity_history = []
         evaluation_count_history = []
         improvement_generations = []
+        restart_generations = []  # 记录重启发生的代数
 
         for generation in range(self.generations):
             print(f"Generation {generation+1}/{self.generations}")
 
             # 记录进化前状态
             old_best = self.best_fitness
-            
-            avg_fitness = self.evolve_generation_vectorized(generation)
+
+            # 记录进化前的变异强度
+            pre_evolution_mutation_intensity = self.mutation_intensity
+
+            result = self.evolve_generation_vectorized(generation)
+            if isinstance(result, tuple):
+                avg_fitness, restarted = result
+            else:
+                avg_fitness, restarted = result, False
 
             # 记录统计信息
             best_fitness_history.append(self.best_fitness)
@@ -437,10 +449,19 @@ class GeneticOptimizer:
                 avg_fitness_history.append(avg_fitness)
             else:
                 avg_fitness_history.append(self.best_fitness)  # 重启时使用最佳值
-            stagnation_history.append(self.stagnation_counter)
+
+            # 如果发生了重启，记录重启代数和重启前的停滞计数
+            if restarted:
+                restart_generations.append(generation + 1)
+                # 重启时记录达到阈值的停滞计数
+                stagnation_history.append(self.stagnation_threshold)
+            else:
+                stagnation_history.append(self.stagnation_counter)
+
+            # 记录更新后的变异强度（包含重启时的增加）
             mutation_intensity_history.append(self.mutation_intensity)
             evaluation_count_history.append(self.evaluations)
-            
+
             # 记录改进的世代
             if self.best_fitness > old_best:
                 improvement_generations.append(generation + 1)
@@ -455,136 +476,248 @@ class GeneticOptimizer:
         # 高级可视化功能 - 详细分析优化过程
         if plot_convergence:
             # 设置美观的样式
-            plt.style.use('seaborn-v0_8-darkgrid')
+            try:
+                plt.style.use('seaborn-v0_8-darkgrid')
+            except OSError:
+                try:
+                    plt.style.use('seaborn-darkgrid')
+                except OSError:
+                    plt.style.use('default')
             fig, axes = plt.subplots(2, 3, figsize=(18, 10))
-            fig.suptitle('遗传算法优化详细分析', fontsize=16, fontweight='bold')
+            fig.suptitle('Genetic Algorithm Optimization Analysis',
+                         fontsize=16, fontweight='bold')
 
             # 子图1: 适应度收敛曲线
             ax1 = axes[0, 0]
-            generations = range(1, len(best_fitness_history)+1)
-            ax1.plot(generations, best_fitness_history, 'r-', linewidth=2.5, 
-                    label='最佳适应度', marker='o', markersize=2)
-            ax1.plot(generations, avg_fitness_history, 'b--', linewidth=1.5, 
-                    label='平均适应度', alpha=0.7)
-            ax1.fill_between(generations, avg_fitness_history, best_fitness_history, 
-                           alpha=0.2, color='green', label='适应度差距')
-            
+            generations = list(range(1, len(best_fitness_history)+1))
+
+            # 确保数组长度一致
+            min_len = min(len(best_fitness_history), len(
+                avg_fitness_history), len(generations))
+            generations = generations[:min_len]
+            best_vals = best_fitness_history[:min_len]
+            avg_vals = avg_fitness_history[:min_len]
+
+            ax1.plot(generations, best_vals, 'r-', linewidth=2.5,
+                     label='Best Fitness', marker='o', markersize=2)
+            ax1.plot(generations, avg_vals, 'b--', linewidth=1.5,
+                     label='Average Fitness', alpha=0.7)
+
+            # Fill between average and best fitness
+            if len(generations) > 0:
+                where_fill = np.array(avg_vals) <= np.array(best_vals)
+                if np.any(where_fill):
+                    ax1.fill_between(generations, avg_vals, best_vals,
+                                     where=where_fill, alpha=0.2, color='green',
+                                     label='Fitness Gap')
+
             # 标记改进点
             if improvement_generations:
-                improvement_values = [best_fitness_history[i-1] for i in improvement_generations]
-                ax1.scatter(improvement_generations, improvement_values, 
-                          color='gold', s=50, zorder=5, label='改进点', marker='*')
-            
-            ax1.set_xlabel('代数', fontsize=12)
-            ax1.set_ylabel('覆盖时长 (秒)', fontsize=12)
-            ax1.set_title('适应度收敛分析', fontsize=13, fontweight='bold')
-            ax1.legend(loc='lower right')
+                improvement_values = []
+                for i in improvement_generations:
+                    if 0 < i <= len(best_vals):
+                        improvement_values.append(best_vals[i-1])
+                if improvement_values:
+                    valid_gens = [
+                        g for g in improvement_generations if 0 < g <= len(best_vals)]
+                    ax1.scatter(valid_gens, improvement_values,
+                                color='gold', s=50, zorder=5, label='Improvement', marker='*')
+
+            ax1.set_xlabel('Generation', fontsize=12)
+            ax1.set_ylabel('Coverage Duration (s)', fontsize=12)
+            ax1.set_title('Fitness Convergence Analysis',
+                          fontsize=13, fontweight='bold')
+            ax1.legend(loc=(0.65, 0.75))
             ax1.grid(True, alpha=0.3)
 
             # 子图2: 缓存效率分析
             ax2 = axes[0, 1]
-            if cache_hit_ratios:
-                ax2.plot(generations, [r*100 for r in cache_hit_ratios], 
-                        'g-', linewidth=2, marker='s', markersize=3)
-                ax2.fill_between(generations, 0, [r*100 for r in cache_hit_ratios], 
-                               alpha=0.3, color='green')
-                final_ratio = cache_hit_ratios[-1] * 100
-                ax2.axhline(y=final_ratio, color='red', linestyle='--', 
-                          label=f'最终命中率: {final_ratio:.1f}%')
-                ax2.set_ylabel('缓存命中率 (%)', fontsize=12)
-            ax2.set_xlabel('代数', fontsize=12)
-            ax2.set_title('缓存效率变化', fontsize=13, fontweight='bold')
+            if cache_hit_ratios and len(cache_hit_ratios) > 0:
+                cache_len = min(len(cache_hit_ratios), len(generations))
+                if cache_len > 0:
+                    gens_cache = generations[:cache_len]
+                    ratios_pct = [r*100 for r in cache_hit_ratios[:cache_len]]
+
+                    # 确保数组是真正的列表而不是0维数组
+                    gens_cache = list(gens_cache) if hasattr(
+                        gens_cache, '__iter__') else [gens_cache]
+                    ratios_pct = list(ratios_pct) if hasattr(
+                        ratios_pct, '__iter__') else [ratios_pct]
+
+                    if len(gens_cache) > 1 and len(ratios_pct) > 1:  # 需要至少2个点才能绘图
+                        ax2.plot(gens_cache, ratios_pct, 'g-',
+                                 linewidth=2, marker='s', markersize=3)
+                        try:
+                            ax2.fill_between(
+                                gens_cache, 0, ratios_pct, alpha=0.3, color='green')
+                        except (IndexError, ValueError):
+                            pass  # 如果fill_between失败就跳过
+                        final_ratio = cache_hit_ratios[-1] * 100
+                        ax2.axhline(y=final_ratio, color='red', linestyle='--',
+                                    label=f'Final Hit Rate: {final_ratio:.1f}%')
+                    elif len(gens_cache) >= 1 and len(ratios_pct) >= 1:
+                        ax2.scatter(gens_cache, ratios_pct,
+                                    color='green', s=50, marker='s')
+                ax2.set_ylabel('Cache Hit Rate (%)', fontsize=12)
+            ax2.set_xlabel('Generation', fontsize=12)
+            ax2.set_title('Cache Efficiency Analysis',
+                          fontsize=13, fontweight='bold')
             ax2.legend()
             ax2.grid(True, alpha=0.3)
 
             # 子图3: 停滞与重启分析
             ax3 = axes[0, 2]
-            ax3.plot(generations, stagnation_history, 'orange', linewidth=2, 
-                    marker='d', markersize=3, label='停滞计数')
-            ax3.axhline(y=self.stagnation_threshold, color='red', linestyle='--', 
-                      label=f'重启阈值: {self.stagnation_threshold}')
-            
-            # 标记重启点
-            restart_points = [i+1 for i, s in enumerate(stagnation_history) if s == 0 and i > 0]
-            if restart_points:
-                ax3.scatter(restart_points, [0]*len(restart_points), 
-                          color='red', s=80, marker='X', zorder=5, label='种群重启')
-            
-            ax3.set_xlabel('代数', fontsize=12)
-            ax3.set_ylabel('停滞计数', fontsize=12)
-            ax3.set_title('停滞与重启分析', fontsize=13, fontweight='bold')
+            stag_len = min(len(stagnation_history), len(generations))
+            gens_stag = generations[:stag_len]
+            stag_vals = stagnation_history[:stag_len]
+
+            if len(gens_stag) > 0:
+                ax3.plot(gens_stag, stag_vals, 'orange', linewidth=2,
+                         marker='d', markersize=3, label='Stagnation Count')
+            ax3.axhline(y=self.stagnation_threshold, color='red', linestyle='--',
+                        label=f'Restart Threshold: {self.stagnation_threshold}')
+
+            # Mark restart points using recorded restart generations
+            if restart_generations:
+                # 标记在重启后的下一代，即下降后的拐点位置(y=0)
+                restart_next_gen = [
+                    gen + 1 for gen in restart_generations if gen + 1 <= len(generations)]
+                if restart_next_gen:
+                    ax3.scatter(restart_next_gen, [0] * len(restart_next_gen),
+                                color='red', s=80, marker='X', zorder=5, label='Population Restart')
+
+            ax3.set_xlabel('Generation', fontsize=12)
+            ax3.set_ylabel('Stagnation Count', fontsize=12)
+            ax3.set_title('Stagnation & Restart Analysis', fontsize=13, fontweight='bold')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
 
             # 子图4: 变异强度动态调整
             ax4 = axes[1, 0]
-            ax4.plot(generations, mutation_intensity_history, 'purple', 
-                    linewidth=2.5, marker='v', markersize=3)
-            ax4.fill_between(generations, 1.0, mutation_intensity_history, 
-                           where=[m >= 1.0 for m in mutation_intensity_history],
-                           alpha=0.3, color='purple', label='强度增强区域')
-            ax4.axhline(y=1.0, color='gray', linestyle='-', alpha=0.5, label='基准强度')
-            ax4.set_xlabel('代数', fontsize=12)
-            ax4.set_ylabel('变异强度', fontsize=12)
-            ax4.set_title('自适应变异强度', fontsize=13, fontweight='bold')
+            mut_len = min(len(mutation_intensity_history), len(generations))
+            gens_mut = generations[:mut_len]
+            mut_vals = mutation_intensity_history[:mut_len]
+
+            ax4.plot(gens_mut, mut_vals, 'purple',
+                     linewidth=2.5, marker='v', markersize=3)
+            if len(gens_mut) > 0:
+                where_enhanced = np.array(mut_vals) >= 1.0
+                if np.any(where_enhanced):
+                    ax4.fill_between(gens_mut, 1.0, mut_vals,
+                                     where=where_enhanced, alpha=0.3, color='purple',
+                                     label='Enhanced Zone')
+            ax4.axhline(y=1.0, color='gray', linestyle='-',
+                        alpha=0.5, label='Base Intensity')
+            ax4.set_xlabel('Generation', fontsize=12)
+            ax4.set_ylabel('Mutation Intensity', fontsize=12)
+            ax4.set_title('Adaptive Mutation Intensity',
+                          fontsize=13, fontweight='bold')
             ax4.legend()
             ax4.grid(True, alpha=0.3)
 
             # 子图5: 评估效率分析
             ax5 = axes[1, 1]
-            eval_per_gen = [evaluation_count_history[i] - (evaluation_count_history[i-1] if i > 0 else 0) 
-                           for i in range(len(evaluation_count_history))]
-            ax5.bar(generations, eval_per_gen, alpha=0.7, color='skyblue', label='每代评估次数')
-            avg_eval = np.mean(eval_per_gen)
-            ax5.axhline(y=avg_eval, color='red', linestyle='--', 
-                      label=f'平均: {avg_eval:.0f}次/代')
-            ax5.set_xlabel('代数', fontsize=12)
-            ax5.set_ylabel('评估次数', fontsize=12)
-            ax5.set_title('计算效率分析', fontsize=13, fontweight='bold')
+            eval_len = min(len(evaluation_count_history), len(generations))
+            gens_eval = generations[:eval_len]
+            eval_counts = evaluation_count_history[:eval_len]
+
+            if len(eval_counts) > 0:
+                eval_per_gen = [eval_counts[i] - (eval_counts[i-1] if i > 0 else 0)
+                                for i in range(len(eval_counts))]
+
+                if len(gens_eval) > 0:
+                    ax5.bar(gens_eval, eval_per_gen, alpha=0.7,
+                            color='skyblue', label='Evaluations per Gen')
+                    if len(eval_per_gen) > 0:
+                        avg_eval = np.mean(eval_per_gen)
+                        ax5.axhline(y=avg_eval, color='red', linestyle='--',
+                                    label=f'Average: {avg_eval:.0f}/gen')
+            ax5.set_xlabel('Generation', fontsize=12)
+            ax5.set_ylabel('Number of Evaluations', fontsize=12)
+            ax5.set_title('Computational Efficiency Analysis',
+                          fontsize=13, fontweight='bold')
             ax5.legend()
             ax5.grid(True, alpha=0.3)
 
             # 子图6: 优化总结统计
             ax6 = axes[1, 2]
             ax6.axis('off')
-            
+
             # 计算统计信息
+            total_runtime = time.time() - optimization_start
             total_improvements = len(improvement_generations)
             final_fitness = best_fitness_history[-1]
             initial_fitness = best_fitness_history[0]
-            improvement_rate = ((final_fitness - initial_fitness) / initial_fitness * 100) if initial_fitness > 0 else 0
+            improvement_rate = ((final_fitness - initial_fitness) /
+                                initial_fitness * 100) if initial_fitness > 0 else 0
             total_evaluations = evaluation_count_history[-1]
-            avg_cache_hit = np.mean(cache_hit_ratios) * 100 if cache_hit_ratios else 0
-            
-            stats_text = f"""优化统计摘要
+            avg_cache_hit = np.mean(cache_hit_ratios) * \
+                100 if cache_hit_ratios else 0
+
+            # 获取CPU信息
+            try:
+                # 尝试从/proc/cpuinfo获取真实CPU型号
+                with open('/proc/cpuinfo', 'r') as f:
+                    cpu_info = "Unknown CPU"
+                    for line in f:
+                        if 'model name' in line:
+                            cpu_info = line.split(':')[1].strip()
+                            break
+            except:
+                try:
+                    cpu_info = platform.processor() or platform.machine()
+                    if not cpu_info or cpu_info in ['x86_64', 'AMD64', 'i386']:
+                        cpu_info = "Unknown CPU"
+                except:
+                    cpu_info = "Unknown CPU"
+
+            # 获取内存信息
+            try:
+                with open('/proc/meminfo', 'r') as f:
+                    mem_total = 0
+                    for line in f:
+                        if 'MemTotal' in line:
+                            mem_kb = int(line.split()[1])
+                            mem_gb = round(mem_kb / 1024 / 1024)
+                            mem_info = f"{mem_gb}GB RAM"
+                            break
+                    else:
+                        mem_info = "Unknown RAM"
+            except:
+                mem_info = "Unknown RAM"
+
+            stats_text = f"""Optimization Summary
             
 ┌─────────────────────────────────┐
-│  最终覆盖时长: {final_fitness:.3f} 秒        │
-│  初始覆盖时长: {initial_fitness:.3f} 秒        │
-│  改进幅度: {improvement_rate:+.1f}%           │
-│  改进次数: {total_improvements} 次              │
-│  总评估次数: {total_evaluations} 次           │
-│  平均缓存命中率: {avg_cache_hit:.1f}%      │
-│  种群重启次数: {len(restart_points)} 次        │
-│  最终停滞计数: {stagnation_history[-1]} 次     │
+│  Final Coverage: {final_fitness:.3f} sec      │
+│  Initial Coverage: {initial_fitness:.3f} sec    │
+│  Improvement: {improvement_rate:+.1f}%             │
+│  Improvements: {total_improvements} times            │
+│  Total Runtime: {total_runtime:.2f} sec         │
+│  Total Evaluations: {total_evaluations}           │
+│  Avg Cache Hit Rate: {avg_cache_hit:.1f}%     │
+│  Population Restarts: {len(restart_generations)}        │
+│  Final Stagnation: {stagnation_history[-1]}         │
 └─────────────────────────────────┘
 
-算法性能特征:
-• 进程数: {self.n_processes}
-• 种群大小: {self.population_size}
-• 最大代数: {self.generations}
-• 停滞阈值: {self.stagnation_threshold}
+System & Algorithm Config:
+• CPU: {cpu_info[:25]}
+• Memory: {mem_info}
+• Processes: {self.n_processes}
+• Population: {self.population_size}
+• Max Gen: {self.generations}
+• Stagnation: {self.stagnation_threshold}
             """
-            
+
             ax6.text(0.05, 0.95, stats_text, transform=ax6.transAxes, fontsize=11,
-                    verticalalignment='top', fontfamily='monospace',
-                    bbox=dict(boxstyle="round,pad=0.5", facecolor="lightblue", alpha=0.8))
+                     verticalalignment='top', fontfamily='monospace',
+                     bbox=dict(boxstyle="round,pad=0.5", facecolor="lightblue", alpha=0.8))
 
             plt.tight_layout()
-            plt.savefig('tmp/enhanced_ga_analysis.png', dpi=800, bbox_inches='tight', 
-                       facecolor='white', edgecolor='none')
+            plt.savefig('tmp/enhanced_ga_analysis.png', dpi=800, bbox_inches='tight',
+                        facecolor='white', edgecolor='none')
             plt.show()
-            
+
             # 重置样式
             plt.style.use('default')
 
