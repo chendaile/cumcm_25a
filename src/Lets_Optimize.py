@@ -166,7 +166,9 @@ def export_physical_parameters_to_excel(best_params, filename="output/physical_p
 if __name__ == '__main__':
     best_params = {
         'drones': {
-            "FY1": [-131.67, 0.92, [(0.0, 3.56), (3.26, 4.87), (5.19, 5.71)]]
+            "FY1": [-126.61, 2.67, [(0.0, 3.31)]],
+            "FY2": [33.38, -66.21, [(16, 5)]],
+            "FY1": [20.43, 137.94, [(19.55, 2.89)]]
         },
         'targeted_missile_ids': ['M1']
     }
