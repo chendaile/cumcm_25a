@@ -1,38 +1,39 @@
-import json
-from Problem_object import Global_System
-from Virtualizer import virtualize_single_jammer
+"""Utilities to reproduce the analysis of question 1."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from cumcm import GlobalSystem, plot_scene
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data-bin"
 
 
-def find_cover_seconds_Q1():
-    with open("data-bin/initial_positions.json") as f:
-        initial_positions = json.load(f)
-    with open("data-bin/initial_drones_forward_vector-Q1.json") as f:
-        drones_forward_vector = json.load(f)
-
-    global_sys = Global_System(initial_positions, drones_forward_vector)
-    global_sys.add_jammers('FY1', 1.5, 3.6)
-
-    duration = global_sys.get_cover_seconds_all_jammers()
-    print(f"Total coverage duration: {duration:.2f} seconds")
+def _load_system() -> GlobalSystem:
+    return GlobalSystem.from_json(
+        DATA_DIR / "initial_positions.json",
+        DATA_DIR / "initial_drones_forward_vector-Q1.json",
+    )
 
 
-def test_Q1(tmp_time=7.9):
-    with open("data-bin/initial_positions.json") as f:
-        initial_positions = json.load(f)
-    with open("data-bin/drones_forward_vector-Q1.json") as f:
-        drones_forward_vector = json.load(f)
+def find_cover_seconds_Q1() -> None:
+    system = _load_system()
+    system.add_jammer("FY1", 1.5, 3.6)
+    durations = system.cover_durations(list(system.missiles.keys()))
+    total = sum(durations.values())
+    print(f"Total coverage duration: {total:.2f} seconds")
+    for missile_id, duration in durations.items():
+        print(f"  {missile_id}: {duration:.2f}s")
 
-    global_sys = Global_System(initial_positions, drones_forward_vector)
-    global_sys.add_jammers('FY1', 1.5, 3.6)
 
-    result = global_sys.detect_occlusion_single_jammer(
-        tmp_time, global_sys.Missiles['M1'], global_sys.jammers['FY1'][0])
+def test_Q1(tmp_time: float = 7.9) -> None:
+    system = _load_system()
+    jammer = system.add_jammer("FY1", 1.5, 3.6)
+    missile = system.missiles["M1"]
+    result = system.detect_occlusion_single_jammer(tmp_time, missile, jammer)
     print(f"t={tmp_time:.2f}s: occlusion detected = {result}")
-    virtualize_single_jammer(
-        tmp_time, global_sys.Missiles['M1'], global_sys.Drones['FY1'], global_sys.jammers['FY1'][0],
-        global_sys.true_goal)
+    plot_scene(system, tmp_time, show=True)
 
 
-if __name__ == '__main__':
-    # find_cover_seconds_Q1()
+if __name__ == "__main__":
     test_Q1()
