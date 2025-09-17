@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -35,7 +35,9 @@ def run_genetic_workflow(drone_ids: Sequence[str], n_jammers: int, population_si
                          save_json: bool = True,
                          export_excel_path: Path | None = None,
                          save_json_path: Path | None = None,
-                         video: bool = False) -> WorkflowResult:
+                         video: bool = False,
+                         progress_callback: Callable[[int, float, float, Sequence[float]], None] | None = None
+                         ) -> WorkflowResult:
     positions = _load_json(POSITIONS_PATH)
     vectors = _load_json(FORWARD_VECTOR_PATH)
 
@@ -51,7 +53,7 @@ def run_genetic_workflow(drone_ids: Sequence[str], n_jammers: int, population_si
         random_seed=random_seed,
     )
 
-    optimisation_output = optimizer.optimize()
+    optimisation_output = optimizer.optimize(progress_callback=progress_callback)
     simulation = run_simulation(POSITIONS_PATH, FORWARD_VECTOR_PATH,
                                 optimisation_output.best_plan, targeted_missiles)
 

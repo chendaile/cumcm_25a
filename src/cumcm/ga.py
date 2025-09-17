@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence
+from typing import Callable, Dict, Iterable, List, Sequence
 
 import numpy as np
 
@@ -41,7 +41,7 @@ class GeneticOptimizer:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def optimize(self) -> GAResult:
+    def optimize(self, progress_callback: Callable[[int, float, float, List[float]], None] | None = None) -> GAResult:
         population = [self._create_individual() for _ in range(self.population_size)]
         best_plan = population[0]
         best_fitness = float("-inf")
@@ -55,6 +55,14 @@ class GeneticOptimizer:
             if fitnesses[idx_best] > best_fitness:
                 best_fitness = float(fitnesses[idx_best])
                 best_plan = population[idx_best]
+
+            if progress_callback is not None:
+                progress_callback(
+                    generation,
+                    float(fitnesses[idx_best]),
+                    best_fitness,
+                    history.copy(),
+                )
 
             population = self._evolve(population, fitnesses)
 
