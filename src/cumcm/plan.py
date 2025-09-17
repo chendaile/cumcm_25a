@@ -28,18 +28,23 @@ class DronePlan:
     jammers: List[JammerPlan] = field(default_factory=list)
 
     def clamp(self, *, speed_limits: tuple[float, float] = (70.0, 140.0)) -> None:
-        magnitude = float(np.linalg.norm(self.velocity[:2]))
         min_speed, max_speed = speed_limits
-        if magnitude == 0:
-            magnitude = min_speed
-        scale = 1.0
-        if magnitude < min_speed:
-            scale = min_speed / magnitude
-        elif magnitude > max_speed:
-            scale = max_speed / magnitude
-        self.velocity[:2] *= scale
+        planar = np.array(self.velocity[:2], dtype=float, copy=True)
+        magnitude = float(np.linalg.norm(planar))
+        if magnitude == 0.0:
+            planar = np.array([-min_speed, 0.0], dtype=float)
+        else:
+            scale = 1.0
+            if magnitude < min_speed:
+                scale = min_speed / magnitude
+            elif magnitude > max_speed:
+                scale = max_speed / magnitude
+            planar *= scale
+
         if self.velocity.shape == (2,):
-            self.velocity = np.append(self.velocity, 0.0)
+            self.velocity = np.array([planar[0], planar[1], 0.0], dtype=float)
+        else:
+            self.velocity[:2] = planar
         for jammer in self.jammers:
             jammer.clamp()
         self.jammers.sort(key=lambda item: item.release_time)
