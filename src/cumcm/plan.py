@@ -29,22 +29,21 @@ class DronePlan:
 
     def clamp(self, *, speed_limits: tuple[float, float] = (70.0, 140.0)) -> None:
         min_speed, max_speed = speed_limits
-        planar = np.array(self.velocity[:2], dtype=float, copy=True)
-        magnitude = float(np.linalg.norm(planar))
+        velocity = np.array(self.velocity, dtype=float, copy=True)
+        if velocity.size < 2:
+            raise ValueError("Velocity must have at least two components")
+        if velocity.size == 2:
+            velocity = np.append(velocity, 0.0)
+        vector = velocity[:3]
+        magnitude = float(np.linalg.norm(vector))
         if magnitude == 0.0:
-            planar = np.array([-min_speed, 0.0], dtype=float)
+            vector = np.array([-min_speed, 0.0, 0.0], dtype=float)
         else:
-            scale = 1.0
             if magnitude < min_speed:
-                scale = min_speed / magnitude
+                vector = vector * (min_speed / magnitude)
             elif magnitude > max_speed:
-                scale = max_speed / magnitude
-            planar *= scale
-
-        if self.velocity.shape == (2,):
-            self.velocity = np.array([planar[0], planar[1], 0.0], dtype=float)
-        else:
-            self.velocity[:2] = planar
+                vector = vector * (max_speed / magnitude)
+        self.velocity = vector
         for jammer in self.jammers:
             jammer.clamp()
         self.jammers.sort(key=lambda item: item.release_time)
