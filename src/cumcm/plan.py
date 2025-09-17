@@ -36,14 +36,17 @@ class DronePlan:
             velocity = np.append(velocity, 0.0)
         vector = velocity[:3]
         magnitude = float(np.linalg.norm(vector))
-        if magnitude == 0.0:
-            vector = np.array([-min_speed, 0.0, 0.0], dtype=float)
+        if magnitude <= 0.0:
+            direction = np.array([-1.0, 0.0, 0.0], dtype=float)
+            target_speed = np.nextafter(min_speed, float("inf"))
         else:
+            direction = vector / magnitude
+            target_speed = magnitude
             if magnitude < min_speed:
-                vector = vector * (min_speed / magnitude)
+                target_speed = np.nextafter(min_speed, float("inf"))
             elif magnitude > max_speed:
-                vector = vector * (max_speed / magnitude)
-        self.velocity = vector
+                target_speed = np.nextafter(max_speed, 0.0)
+        self.velocity = direction * target_speed
         for jammer in self.jammers:
             jammer.clamp()
         self.jammers.sort(key=lambda item: item.release_time)
