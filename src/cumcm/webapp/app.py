@@ -2,33 +2,31 @@
 
 from __future__ import annotations
 
-import base64
 import json
-from copy import deepcopy
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict
 
 from flask import (
     Flask,
+    Response,
     abort,
     jsonify,
     render_template_string,
     request,
     send_from_directory,
+    stream_with_context,
 )
 
-from ..analysis import compute_interference_stats, run_simulation, save_plan_json, serialize_plan
-from ..plan import Plan
-from ..system import GlobalSystem
-from ..visualization import jam_interference_summary, plot_scene
-from ..workflows import (
-    FORWARD_VECTOR_PATH,
-    OUTPUT_DIR,
-    POSITIONS_PATH,
-    run_genetic_workflow,
-    verify_plan,
+from ..questions import QUESTION_PRESETS, parse_overrides, question_metadata
+from ..services import (
+    build_dashboard_payload,
+    default_missiles,
+    load_plan,
+    run_question,
+    simulation_payload,
+    stream_question,
 )
+from ..workflows import OUTPUT_DIR, verify_plan
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
@@ -36,27 +34,28 @@ app.config["JSON_SORT_KEYS"] = False
 
 TEMPLATE = """
 <!DOCTYPE html>
-<html lang="zh-cn">
+<html lang=\"zh-cn\">
 <head>
-    <meta charset="utf-8" />
+    <meta charset=\"utf-8\" />
     <title>遮挡优化控制台</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />
+    <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />
+    <link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />
+    <script src=\"https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js\"></script>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f3f6fb; color: #1f2933; }
         header { background: linear-gradient(135deg, #14213d, #274060); color: white; padding: 1.6rem 2.4rem; }
         header h1 { margin: 0; font-weight: 600; font-size: 1.8rem; }
-        main { padding: 2.4rem; max-width: 1200px; margin: 0 auto; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.6rem; }
+        main { padding: 2.4rem; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.6rem; }
+        .layout { display: grid; grid-template-columns: minmax(320px, 380px) minmax(0, 1fr); gap: 1.6rem; align-items: stretch; }
         .card { background: white; border-radius: 16px; box-shadow: 0 12px 30px rgba(15, 35, 95, 0.08); padding: 1.8rem; display: flex; flex-direction: column; gap: 1.2rem; }
         h2 { margin: 0; font-weight: 600; color: #1b2a4b; }
         label { font-weight: 600; color: #37425b; display: block; margin-bottom: 0.4rem; }
         select, input { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d4d9e6; border-radius: 10px; font-size: 0.95rem; }
         button { border: none; border-radius: 10px; padding: 0.65rem 1.2rem; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; font-weight: 600; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        button:hover { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(37, 99, 235, 0.2); }
+        button:hover:not([disabled]) { transform: translateY(-1px); box-shadow: 0 12px 22px rgba(37, 99, 235, 0.2); }
+        button[disabled] { opacity: 0.6; cursor: not-allowed; box-shadow: none; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 0.55rem 0.6rem; border-bottom: 1px solid #e5e9f4; text-align: left; }
         th { background: #eef2ff; font-weight: 600; }
@@ -68,15 +67,34 @@ TEMPLATE = """
         .downloads { display: flex; flex-wrap: wrap; gap: 0.8rem; }
         .downloads a { background: rgba(59, 130, 246, 0.08); padding: 0.45rem 0.75rem; border-radius: 8px; color: #1d4ed8; text-decoration: none; font-weight: 600; }
         .downloads a:hover { background: rgba(37, 99, 235, 0.12); }
-        .section-title { font-size: 1.05rem; font-weight: 600; color: #1c2a4d; }
+        .section-title { font-size: 1.05rem; font-weight: 600; color: #1c2a4d; margin: 0; }
         .context-block { background: #f4f7ff; border: 1px solid #d9e2ff; border-radius: 12px; padding: 0.9rem 1.1rem; }
         .context-block img { max-width: 100%; border-radius: 12px; margin-top: 0.6rem; }
         .question-info { background: #f5f7fa; border-radius: 12px; padding: 0.8rem 1rem; border: 1px solid #e1e7f5; }
         .question-info ul { padding-left: 1.2rem; margin: 0.4rem 0 0; }
         .question-info li { margin-bottom: 0.2rem; }
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.8rem; }
-        .status-log { background: #0f172a; color: #f1f5f9; padding: 1rem; border-radius: 12px; font-size: 0.9rem; max-height: 220px; overflow-y: auto; }
+        .status-log { background: #0f172a; color: #f1f5f9; padding: 1rem; border-radius: 12px; font-size: 0.9rem; max-height: 240px; overflow-y: auto; }
         .status-log strong { color: #38bdf8; }
+        .tab-header { display: flex; gap: 0.6rem; background: #eef2ff; border-radius: 12px; padding: 0.4rem; }
+        .tab-button { flex: 1; padding: 0.55rem 0.75rem; background: transparent; border-radius: 10px; color: #1b2a4b; font-weight: 600; border: none; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+        .tab-button.active { background: white; color: #1d4ed8; box-shadow: 0 8px 18px rgba(37, 99, 235, 0.15); }
+        .tab-panel { display: none; flex-direction: column; gap: 1rem; }
+        .tab-panel.active { display: flex; }
+        .plan-card { gap: 1.4rem; }
+        .run-card { gap: 1.4rem; }
+        .question-actions { display: flex; align-items: center; gap: 1rem; }
+        .question-progress { font-size: 0.9rem; color: #47516b; }
+        .question-progress[data-tone="error"] { color: #ef4444; }
+        .question-progress[data-tone="success"] { color: #16a34a; }
+        .history-wrapper { display: none; }
+        .actions-row { display: flex; flex-direction: column; gap: 0.8rem; }
+        @media (min-width: 640px) {
+            .actions-row { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+        @media (max-width: 880px) {
+            .layout { grid-template-columns: 1fr; }
+        }
         @media (max-width: 720px) {
             main { padding: 1.6rem; }
             header { padding: 1.4rem 1.6rem; }
@@ -86,78 +104,95 @@ TEMPLATE = """
 <body>
     <header>
         <h1>烟幕干扰全流程控制台</h1>
-        <p class="muted">一站式管理：题目运行、方案验证、可视化展示与结果下载</p>
+        <p class=\"muted\">一站式管理：题目运行、方案浏览与验证、结果下载</p>
     </header>
     <main>
-        <div class="grid">
-            <section class="card" style="grid-column: 1 / -1;">
-                <h2>方案浏览</h2>
-                <label for="plan-select">选择已有方案</label>
-                <select id="plan-select"></select>
-                <div class="downloads" id="plan-downloads"></div>
-                <div id="plan-summary" class="summary-block">
-                    <div class="metrics" id="plan-metrics"></div>
-                    <canvas id="plan-chart" height="110"></canvas>
-                    <div id="plan-history-wrapper" style="display:none;">
-                        <p class="section-title">优化历史</p>
-                        <canvas id="plan-history" height="110"></canvas>
+        <div class=\"layout\">
+            <section class=\"card plan-card\">
+                <div class=\"tab-header\">
+                    <button class=\"tab-button active\" data-target=\"plan-browser\">方案浏览</button>
+                    <button class=\"tab-button\" data-target=\"plan-verify\">方案验证</button>
+                </div>
+                <div class=\"tab-panel active\" id=\"plan-browser\">
+                    <div>
+                        <label for=\"plan-select\">选择已有方案</label>
+                        <select id=\"plan-select\"></select>
+                    </div>
+                    <div class=\"downloads\" id=\"plan-downloads\"></div>
+                    <div id=\"plan-summary\" class=\"summary-block\">
+                        <div class=\"metrics\" id=\"plan-metrics\"></div>
+                        <canvas id=\"plan-chart\" height=\"120\"></canvas>
+                        <div id=\"plan-history-wrapper\" class=\"history-wrapper\">
+                            <p class=\"section-title\">优化历史</p>
+                            <canvas id=\"plan-history\" height=\"160\"></canvas>
+                        </div>
+                        <div>
+                            <p class=\"section-title\">干扰弹详情</p>
+                            <div id=\"plan-jammers\"></div>
+                        </div>
+                        <div>
+                            <p class=\"section-title\">遮挡区间</p>
+                            <div id=\"plan-intervals\"></div>
+                        </div>
+                        <div id=\"plan-context\"></div>
+                    </div>
+                </div>
+                <div class=\"tab-panel\" id=\"plan-verify\">
+                    <div>
+                        <label for=\"verify-plan\">待验证方案</label>
+                        <select id=\"verify-plan\"></select>
                     </div>
                     <div>
-                        <p class="section-title">干扰弹详情</p>
-                        <div id="plan-jammers"></div>
+                        <label for=\"verify-missiles\">目标导弹（可多选）</label>
+                        <select id=\"verify-missiles\" multiple size=\"6\"></select>
                     </div>
-                    <div>
-                        <p class="section-title">遮挡区间</p>
-                        <div id="plan-intervals"></div>
+                    <div class=\"actions-row\">
+                        <button id=\"verify-button\">重新计算遮挡</button>
+                        <div class=\"downloads\" id=\"verify-downloads\"></div>
                     </div>
-                    <div id="plan-context"></div>
+                    <div id=\"verify-result\" class=\"summary-block\">
+                        <div class=\"metrics\" id=\"verify-metrics\"></div>
+                        <canvas id=\"verify-chart\" height=\"120\"></canvas>
+                        <div id=\"verify-history-wrapper\" class=\"history-wrapper\">
+                            <p class=\"section-title\">优化历史</p>
+                            <canvas id=\"verify-history\" height=\"160\"></canvas>
+                        </div>
+                        <div id=\"verify-jammers\"></div>
+                        <div id=\"verify-intervals\"></div>
+                        <div id=\"verify-context\"></div>
+                    </div>
                 </div>
             </section>
-
-            <section class="card">
+            <section class=\"card run-card\">
                 <h2>题目运行</h2>
-                <label for="question-select">选择题目</label>
-                <select id="question-select"></select>
-                <div class="question-info" id="question-info"></div>
-                <div class="form-grid" id="question-parameters"></div>
-                <button id="run-question">运行题目</button>
-                <div class="downloads" id="question-downloads"></div>
-                <div id="question-result" class="summary-block">
-                    <div class="metrics" id="question-metrics"></div>
-                    <canvas id="question-chart" height="110"></canvas>
-                    <div id="question-history-wrapper" style="display:none;">
-                        <p class="section-title">优化历史</p>
-                        <canvas id="question-history" height="110"></canvas>
+                <div>
+                    <label for=\"question-select\">选择题目</label>
+                    <select id=\"question-select\"></select>
+                </div>
+                <div class=\"question-info\" id=\"question-info\"></div>
+                <div class=\"form-grid\" id=\"question-parameters\"></div>
+                <div class=\"question-actions\">
+                    <button id=\"run-question\">运行题目</button>
+                    <div class=\"question-progress\" id=\"question-progress\"></div>
+                </div>
+                <div class=\"downloads\" id=\"question-downloads\"></div>
+                <div id=\"question-result\" class=\"summary-block\">
+                    <div class=\"metrics\" id=\"question-metrics\"></div>
+                    <canvas id=\"question-chart\" height=\"120\"></canvas>
+                    <div id=\"question-history-wrapper\" class=\"history-wrapper\">
+                        <p class=\"section-title\">实时优化曲线</p>
+                        <canvas id=\"question-history\" height=\"220\"></canvas>
                     </div>
-                    <div id="question-jammers"></div>
-                    <div id="question-intervals"></div>
-                    <div id="question-context"></div>
+                    <div id=\"question-jammers\"></div>
+                    <div id=\"question-intervals\"></div>
+                    <div id=\"question-context\"></div>
                 </div>
-            </section>
-
-            <section class="card">
-                <h2>方案验证</h2>
-                <label for="verify-plan">待验证方案</label>
-                <select id="verify-plan"></select>
-                <label for="verify-missiles">目标导弹（可多选）</label>
-                <select id="verify-missiles" multiple size="6"></select>
-                <button id="verify-button">重新计算遮挡</button>
-                <div class="downloads" id="verify-downloads"></div>
-                <div id="verify-result" class="summary-block">
-                    <div class="metrics" id="verify-metrics"></div>
-                    <canvas id="verify-chart" height="110"></canvas>
-                    <div id="verify-history-wrapper" style="display:none;"><p class="section-title">优化历史</p><canvas id="verify-history" height="110"></canvas></div>
-                    <div id="verify-jammers"></div>
-                    <div id="verify-intervals"></div>
-                    <div id="verify-context"></div>
-                </div>
-            </section>
-
-            <section class="card" style="grid-column: 1 / -1;">
-                <h2>系统日志</h2>
-                <div class="status-log" id="status-log"></div>
             </section>
         </div>
+        <section class=\"card\">
+            <h2>系统日志</h2>
+            <div class=\"status-log\" id=\"status-log\"></div>
+        </section>
     </main>
 
     <script>
@@ -181,7 +216,7 @@ TEMPLATE = """
         }
 
         function createMetric(label, value) {
-            return `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`;
+            return `<div class=\"metric\"><span>${label}</span><strong>${value}</strong></div>`;
         }
 
         function formatNumber(value, digits = 2) {
@@ -314,6 +349,7 @@ TEMPLATE = """
         function updateSummary(prefix, summary, downloads) {
             updateDownloads(`${prefix}-downloads`, downloads);
             const metricContainer = document.getElementById(`${prefix}-metrics`);
+            const historyWrapper = document.getElementById(`${prefix}-history-wrapper`);
             if (!summary) {
                 if (metricContainer) {
                     metricContainer.innerHTML = '<p class="muted">暂无数据，请先运行任务。</p>';
@@ -321,7 +357,6 @@ TEMPLATE = """
                 renderJammerTable(`${prefix}-jammers`, []);
                 renderIntervals(`${prefix}-intervals`, {});
                 renderContext(`${prefix}-context`, null);
-                const historyWrapper = document.getElementById(`${prefix}-history-wrapper`);
                 if (historyWrapper) historyWrapper.style.display = 'none';
                 const chart = charts[`${prefix}-chart`];
                 if (chart) {
@@ -341,12 +376,13 @@ TEMPLATE = """
             if (summary.metadata && summary.metadata.generated_at) {
                 metrics.push(createMetric('生成时间', new Date(summary.metadata.generated_at).toLocaleString()));
             }
-            metricContainer.innerHTML = metrics.join('');
+            if (metricContainer) {
+                metricContainer.innerHTML = metrics.join('');
+            }
             updateBarChart(`${prefix}-chart`, '遮挡时间 (s)', summary.durations || {});
             renderJammerTable(`${prefix}-jammers`, summary.jammers || []);
             renderIntervals(`${prefix}-intervals`, summary.intervals || {});
             renderContext(`${prefix}-context`, summary.context);
-            const historyWrapper = document.getElementById(`${prefix}-history-wrapper`);
             if (summary.history && summary.history.length) {
                 if (historyWrapper) historyWrapper.style.display = 'block';
                 updateLineChart(`${prefix}-history`, summary.history);
@@ -442,6 +478,7 @@ TEMPLATE = """
                 renderQuestionInfo(preset);
                 renderQuestionForm(preset);
                 updateSummary('question', null, null);
+                updateQuestionProgress('');
             });
         }
 
@@ -497,6 +534,20 @@ TEMPLATE = """
             return overrides;
         }
 
+        function setQuestionRunning(running) {
+            const button = document.getElementById('run-question');
+            if (!button) return;
+            button.disabled = running;
+            button.textContent = running ? '运行中…' : '运行题目';
+        }
+
+        function updateQuestionProgress(message, tone = 'info') {
+            const el = document.getElementById('question-progress');
+            if (!el) return;
+            el.textContent = message || '';
+            el.dataset.tone = tone;
+        }
+
         async function runQuestion() {
             const select = document.getElementById('question-select');
             const preset = questionPresets.find(item => item.id === select.value);
@@ -506,788 +557,161 @@ TEMPLATE = """
             }
             const overrides = gatherQuestionOverrides(preset);
             updateSummary('question', null, null);
+            updateQuestionProgress('准备启动优化...');
             logStatus(`正在运行 ${preset.label}...`);
-            const response = await fetch('/api/run_question', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: preset.id, overrides })
-            });
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: '运行失败' }));
-                logStatus(error.error || '题目运行失败。', 'error');
-                return;
+            setQuestionRunning(true);
+            try {
+                const response = await fetch('/api/run_question_stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: preset.id, overrides })
+                });
+                if (!response.ok || !response.body) {
+                    const error = await response.json().catch(() => ({ error: '运行失败' }));
+                    updateQuestionProgress(error.error || '题目运行失败。', 'error');
+                    logStatus(error.error || '题目运行失败。', 'error');
+                    return;
+                }
+                const decoder = new TextDecoder('utf-8');
+                const reader = response.body.getReader();
+                let buffer = '';
+                let completed = false;
+                const historyWrapper = document.getElementById('question-history-wrapper');
+                if (historyWrapper) historyWrapper.style.display = 'block';
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let idx;
+                    while ((idx = buffer.indexOf('\n')) >= 0) {
+                        const line = buffer.slice(0, idx).trim();
+                        buffer = buffer.slice(idx + 1);
+                        if (!line) continue;
+                        let message;
+                        try {
+                            message = JSON.parse(line);
+                        } catch (err) {
+                            console.error('无法解析进度消息', err);
+                            continue;
+                        }
+                        if (message.event === 'progress') {
+                            updateLineChart('question-history', message.history || []);
+                            updateQuestionProgress(`第 ${message.generation + 1} 代 · 当前最优 ${formatNumber(message.generation_best)} / 历史最优 ${formatNumber(message.best_fitness)}`);
+                        } else if (message.event === 'complete') {
+                            completed = true;
+                            if (message.summary) {
+                                updateSummary('question', message.summary, message.summary.downloads);
+                                updateQuestionProgress(`优化完成 · 最佳适应度 ${formatNumber(message.summary.metadata && message.summary.metadata.fitness)}`, 'success');
+                                await refreshDashboard(message.summary.plan_name, true);
+                                logStatus('题目运行完成。', 'success');
+                            }
+                        } else if (message.event === 'error') {
+                            completed = true;
+                            updateQuestionProgress(message.error || '题目运行失败。', 'error');
+                            logStatus(message.error || '题目运行失败。', 'error');
+                        }
+                    }
+                }
+                if (!completed) {
+                    updateQuestionProgress('优化流程提前结束。', 'error');
+                    logStatus('优化流程提前结束。', 'error');
+                }
+            } catch (error) {
+                updateQuestionProgress('题目运行异常中断。', 'error');
+                logStatus('题目运行异常中断。', 'error');
+                console.error(error);
+            } finally {
+                setQuestionRunning(false);
             }
-            const result = await response.json();
-            updateSummary('question', result.summary, result.summary ? result.summary.downloads : null);
-            if (result.summary && result.summary.plan_name) {
-                await refreshDashboard(result.summary.plan_name, true);
-            }
-            logStatus(`${preset.label} 运行完成。`, 'success');
         }
 
-        async function verifySelectedPlan() {
+        async function verifyPlan() {
             const plan = document.getElementById('verify-plan').value;
+            const selectedOptions = Array.from(document.getElementById('verify-missiles').selectedOptions).map(opt => opt.value);
             if (!plan) {
-                logStatus('请选择需要验证的方案。', 'error');
+                logStatus('请先选择需要验证的方案。', 'error');
                 return;
             }
-            const missiles = Array.from(document.getElementById('verify-missiles').selectedOptions).map(opt => opt.value);
-            logStatus(`正在验证 ${plan} ...`);
+            updateQuestionProgress('');
             updateSummary('verify', null, null);
+            logStatus(`正在验证 ${plan}...`);
             const response = await fetch('/api/verify_plan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ plan, missiles })
+                body: JSON.stringify({ plan, missiles: selectedOptions })
             });
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ error: '验证失败' }));
-                logStatus(error.error || '验证失败。', 'error');
+                logStatus(error.error || '方案验证失败。', 'error');
                 return;
             }
-            const data = await response.json();
-            updateSummary('verify', data.summary, data.summary ? data.summary.downloads : null);
-            logStatus(`${plan} 遮挡验证完成。`, 'success');
+            const result = await response.json();
+            updateSummary('verify', result.summary, result.summary ? result.summary.downloads : null);
+            logStatus('方案验证完成。', 'success');
         }
 
-        function setupEventListeners() {
-            document.getElementById('plan-select').addEventListener('change', async (event) => {
-                const plan = event.target.value;
-                logStatus(`正在加载方案 ${plan} ...`);
-                const data = await refreshDashboard(plan, true);
-                if (data && data.summary) {
-                    setVerifySelection(data.summary.targeted_missiles);
-                }
+        function attachTabEvents() {
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const target = button.dataset.target;
+                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+                    button.classList.add('active');
+                    const panel = document.getElementById(target);
+                    if (panel) panel.classList.add('active');
+                });
             });
-            document.getElementById('run-question').addEventListener('click', runQuestion);
-            document.getElementById('verify-button').addEventListener('click', verifySelectedPlan);
         }
 
-        function bootstrap() {
-            populateMissileOptions(missileOptions);
+        function initialise() {
+            attachTabEvents();
             populatePlanSelectors(initialData.plans);
-            if (initialData.selected_plan) {
-                document.getElementById('plan-select').value = initialData.selected_plan;
-                document.getElementById('verify-plan').value = initialData.selected_plan;
-            }
+            populateMissileOptions(missileOptions);
+            initQuestions();
             if (initialData.summary) {
                 updateSummary('plan', initialData.summary, initialData.summary.downloads);
                 setVerifySelection(initialData.summary.targeted_missiles);
             } else {
                 updateSummary('plan', null, null);
             }
-            initQuestions();
-            setupEventListeners();
-            logStatus('系统初始化完成。', 'success');
+            document.getElementById('plan-select').addEventListener('change', async (event) => {
+                const value = event.target.value;
+                const data = await refreshDashboard(value, true);
+                if (data && data.summary) {
+                    logStatus(`已加载方案 ${value}。`, 'success');
+                }
+            });
+            document.getElementById('run-question').addEventListener('click', runQuestion);
+            document.getElementById('verify-button').addEventListener('click', verifyPlan);
+            document.getElementById('verify-plan').addEventListener('change', (event) => {
+                const value = event.target.value;
+                document.getElementById('plan-select').value = value;
+            });
         }
 
-        bootstrap();
+        document.addEventListener('DOMContentLoaded', initialise);
     </script>
 </body>
 </html>
 """
 
-QUESTION_PRESETS: Dict[str, Dict[str, Any]] = {
-    "Q1": {
-        "label": "Q1 单机遮挡演示",
-        "category": "分析演示",
-        "description": "验证 FY1 在固定投放策略下对 M1 的遮挡情况，并生成可视化截图。",
-        "type": "analysis",
-        "params": {
-            "drone_id": "FY1",
-            "release_time": 1.5,
-            "smoke_delay": 3.6,
-            "time": 7.9,
-        },
-        "info": {
-            "无人机": "FY1",
-            "投放延迟": "1.5 s",
-            "起爆延迟": "3.6 s",
-            "默认观测时间": "7.9 s",
-        },
-        "form": {
-            "time": {
-                "label": "观测时刻 (s)",
-                "input_type": "number",
-                "value_type": "float",
-                "min": 0,
-                "step": 0.1,
-            }
-        },
-    },
-    "Q2": {
-        "label": "Q2 单机单弹优化",
-        "category": "官方题目",
-        "description": "单架无人机携带 1 枚干扰弹，对导弹 M1 进行遮挡优化。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY1"],
-            "n_jammers": 1,
-            "population_size": 200,
-            "generations": 80,
-            "Qname": "Q2",
-            "targeted_missile_ids": ["M1"],
-            "random_seed": 123,
-        },
-        "info": {
-            "无人机": "FY1",
-            "干扰弹数量": 1,
-            "目标导弹": "M1",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 50,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 10,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q3": {
-        "label": "Q3 单机三弹优化",
-        "category": "官方题目",
-        "description": "单架无人机携带 3 枚干扰弹，对导弹 M1 进行遮挡优化。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY1"],
-            "n_jammers": 3,
-            "population_size": 150,
-            "generations": 200,
-            "Qname": "Q3",
-            "targeted_missile_ids": ["M1"],
-            "random_seed": None,
-        },
-        "info": {
-            "无人机": "FY1",
-            "干扰弹数量": 3,
-            "目标导弹": "M1",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 50,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q4": {
-        "label": "Q4 三机协同优化",
-        "category": "官方题目",
-        "description": "三架无人机协同投放 1 枚干扰弹，覆盖导弹 M1。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY1", "FY2", "FY3"],
-            "n_jammers": 1,
-            "population_size": 500,
-            "generations": 120,
-            "Qname": "Q4",
-            "targeted_missile_ids": ["M1"],
-            "random_seed": 1234,
-        },
-        "info": {
-            "无人机": "FY1, FY2, FY3",
-            "干扰弹数量": 1,
-            "目标导弹": "M1",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 100,
-                "step": 20,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 50,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q5": {
-        "label": "Q5 五机三弹优化",
-        "category": "官方题目",
-        "description": "五架无人机协同投放 3 枚干扰弹，覆盖多枚导弹。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY1", "FY2", "FY3", "FY4", "FY5"],
-            "n_jammers": 3,
-            "population_size": 300,
-            "generations": 120,
-            "Qname": "Q5",
-            "targeted_missile_ids": ["M1", "M2", "M3"],
-            "random_seed": 2025,
-        },
-        "info": {
-            "无人机": "FY1, FY2, FY3, FY4, FY5",
-            "干扰弹数量": 3,
-            "目标导弹": "M1, M2, M3",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 120,
-                "step": 20,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q5_FY1": {
-        "label": "Q5 单机拆分 - FY1",
-        "category": "辅助题目",
-        "description": "拆分 Q5 任务，单独优化 FY1 的 3 枚干扰弹。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY1"],
-            "n_jammers": 3,
-            "population_size": 120,
-            "generations": 150,
-            "Qname": "Q5_FY1",
-            "targeted_missile_ids": ["M1", "M2", "M3"],
-            "random_seed": None,
-        },
-        "info": {
-            "无人机": "FY1",
-            "干扰弹数量": 3,
-            "目标导弹": "M1, M2, M3",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q5_FY2": {
-        "label": "Q5 单机拆分 - FY2",
-        "category": "辅助题目",
-        "description": "拆分 Q5 任务，单独优化 FY2 的 3 枚干扰弹。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY2"],
-            "n_jammers": 3,
-            "population_size": 150,
-            "generations": 150,
-            "Qname": "Q5_FY2",
-            "targeted_missile_ids": ["M1", "M2", "M3"],
-            "random_seed": None,
-        },
-        "info": {
-            "无人机": "FY2",
-            "干扰弹数量": 3,
-            "目标导弹": "M1, M2, M3",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 100,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q5_FY3": {
-        "label": "Q5 单机拆分 - FY3",
-        "category": "辅助题目",
-        "description": "拆分 Q5 任务，单独优化 FY3 的 3 枚干扰弹。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY3"],
-            "n_jammers": 3,
-            "population_size": 150,
-            "generations": 150,
-            "Qname": "Q5_FY3",
-            "targeted_missile_ids": ["M1", "M2", "M3"],
-            "random_seed": None,
-        },
-        "info": {
-            "无人机": "FY3",
-            "干扰弹数量": 3,
-            "目标导弹": "M1, M2, M3",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 100,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q5_FY4": {
-        "label": "Q5 单机拆分 - FY4",
-        "category": "辅助题目",
-        "description": "拆分 Q5 任务，单独优化 FY4 的 1 枚干扰弹。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY4"],
-            "n_jammers": 1,
-            "population_size": 120,
-            "generations": 150,
-            "Qname": "Q5_FY4",
-            "targeted_missile_ids": ["M1"],
-            "random_seed": None,
-        },
-        "info": {
-            "无人机": "FY4",
-            "干扰弹数量": 1,
-            "目标导弹": "M1",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-    "Q5_FY5": {
-        "label": "Q5 单机拆分 - FY5",
-        "category": "辅助题目",
-        "description": "拆分 Q5 任务，单独优化 FY5 的 1 枚干扰弹。",
-        "type": "optimisation",
-        "params": {
-            "drone_ids": ["FY5"],
-            "n_jammers": 1,
-            "population_size": 120,
-            "generations": 150,
-            "Qname": "Q5_FY5",
-            "targeted_missile_ids": ["M1", "M2", "M3"],
-            "random_seed": None,
-        },
-        "info": {
-            "无人机": "FY5",
-            "干扰弹数量": 1,
-            "目标导弹": "M1, M2, M3",
-        },
-        "form": {
-            "population_size": {
-                "label": "种群规模",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "generations": {
-                "label": "迭代代数",
-                "input_type": "number",
-                "value_type": "int",
-                "min": 80,
-                "step": 10,
-            },
-            "random_seed": {
-                "label": "随机种子",
-                "input_type": "number",
-                "value_type": "int",
-                "placeholder": "可选",
-            },
-        },
-    },
-}
-
-
-def _question_metadata() -> list[dict[str, Any]]:
-    metadata: list[dict[str, Any]] = []
-    for key, value in QUESTION_PRESETS.items():
-        form_config = []
-        for name, config in value.get("form", {}).items():
-            field = {
-                "name": name,
-                "label": config.get("label", name),
-                "input_type": config.get("input_type", "number"),
-                "value_type": config.get("value_type", "float"),
-                "default": value.get("params", {}).get(name),
-                "min": config.get("min"),
-                "max": config.get("max"),
-                "step": config.get("step"),
-                "placeholder": config.get("placeholder"),
-            }
-            form_config.append(field)
-        metadata.append({
-            "id": key,
-            "label": value.get("label", key),
-            "category": value.get("category", "其它"),
-            "description": value.get("description", ""),
-            "type": value.get("type", "optimisation"),
-            "info": value.get("info", {}),
-            "form": form_config,
-        })
-    return metadata
-
-
-def _available_plans() -> list[dict[str, Any]]:
-    log_dir = OUTPUT_DIR / "log"
-    if not log_dir.exists():
-        return []
-
-    plans: list[dict[str, Any]] = []
-    for path in sorted(log_dir.glob("*.json")):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            payload = {}
-        targeted = payload.get("targeted_missiles") or []
-        metadata = {key: payload.get(key) for key in ("fitness", "generated_at", "question", "parameters") if key in payload}
-        plan = {
-            "name": path.name,
-            "path": str(path),
-            "size_kb": round(path.stat().st_size / 1024.0, 2),
-            "updated_at": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
-            "targeted_missiles": targeted,
-            "metadata": metadata,
-            "downloads": {
-                "json": f"/download/log/{path.name}",
-                "excel": f"/download/excel/{path.stem}.xlsx",
-            },
-        }
-        plans.append(plan)
-    return plans
-
-
-def _load_plan(path: Path) -> tuple[Plan, Dict[str, Any]]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    plan_data = payload.get("plan", payload)
-    plan = Plan.from_dict(plan_data)
-    plan.clamp()
-    return plan, payload
-
-
-def _default_missiles() -> list[str]:
-    data = json.loads(Path(POSITIONS_PATH).read_text(encoding="utf-8"))
-    return list(data.get("missiles", {}).keys())
-
-
-def _simulation_payload(simulation, targeted: Iterable[str]) -> Dict[str, Any]:
-    targeted_list = list(targeted)
-    payload = {
-        "durations": simulation.durations,
-        "intervals": {key: [[float(start), float(end)] for start, end in values] for key, values in simulation.intervals.items()},
-        "total_duration": simulation.total_duration,
-        "plan": serialize_plan(simulation.plan),
-        "targeted_missiles": targeted_list,
-        "drone_count": len(simulation.plan.drones),
-        "jammers": jam_interference_summary(simulation.system, targeted_list),
-    }
-    return payload
-
-
-def _build_dashboard_payload(selected: Optional[str]) -> Dict[str, Any]:
-    plans = _available_plans()
-    plan_names = [plan["name"] for plan in plans]
-    selected_plan = selected or (plan_names[0] if plan_names else None)
-
-    summary: Optional[Dict[str, Any]] = None
-    if selected_plan and selected_plan in plan_names:
-        plan_path = OUTPUT_DIR / "log" / selected_plan
-        plan, payload = _load_plan(plan_path)
-        targeted = payload.get("targeted_missiles") or _default_missiles()
-        simulation = run_simulation(POSITIONS_PATH, FORWARD_VECTOR_PATH, plan, targeted)
-        summary = _simulation_payload(simulation, targeted)
-        summary["metadata"] = {
-            "fitness": payload.get("fitness"),
-            "generated_at": payload.get("generated_at"),
-            "question": payload.get("question"),
-            "parameters": payload.get("parameters"),
-        }
-        summary["plan_name"] = selected_plan
-        summary["downloads"] = {
-            "json": f"/download/log/{selected_plan}",
-            "excel": f"/download/excel/{Path(selected_plan).stem}.xlsx",
-        }
-    return {
-        "plans": plans,
-        "selected_plan": selected_plan,
-        "summary": summary,
-    }
-
-
-def _save_plan_with_metadata(simulation, params: Dict[str, Any], json_path: Path) -> None:
-    targeted = params.get("targeted_missile_ids", [])
-    history = params.get("history", [])
-    best_fitness = max(history) if history else None
-    metadata = {
-        "fitness": best_fitness,
-        "targeted_missiles": list(targeted),
-        "generated_at": datetime.utcnow().isoformat(),
-        "question": params.get("Qname"),
-        "parameters": {
-            "drone_ids": params.get("drone_ids"),
-            "n_jammers": params.get("n_jammers"),
-            "population_size": params.get("population_size"),
-            "generations": params.get("generations"),
-            "random_seed": params.get("random_seed"),
-        },
-    }
-    save_plan_json(simulation.plan, json_path, metadata=metadata)
-
-
-def _run_q1_analysis(overrides: Dict[str, Any]) -> Dict[str, Any]:
-    params = deepcopy(QUESTION_PRESETS["Q1"]["params"])
-    params.update(overrides)
-
-    drone_id = params.get("drone_id", "FY1")
-    release_time = float(params.get("release_time", 1.5))
-    smoke_delay = float(params.get("smoke_delay", 3.6))
-    time_point = float(params.get("time", 7.9))
-
-    q1_vector_path = FORWARD_VECTOR_PATH.parent / "initial_drones_forward_vector-Q1.json"
-    vector_path = q1_vector_path if q1_vector_path.exists() else FORWARD_VECTOR_PATH
-
-    system = GlobalSystem.from_json(POSITIONS_PATH, vector_path)
-    jammer = system.add_jammer(drone_id, release_time, smoke_delay)
-
-    targeted = list(system.missiles.keys())
-    durations = system.cover_durations(targeted)
-    intervals = system.cover_intervals(targeted)
-    total_duration = sum(durations.values())
-
-    occlusion = False
-    if "M1" in system.missiles:
-        occlusion = system.detect_occlusion_single_jammer(time_point, system.missiles["M1"], jammer)
-
-    image_dir = OUTPUT_DIR / "photos" / "webapp"
-    image_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    image_path = image_dir / f"Q1_scene_{timestamp}.png"
-    plot_scene(system, time_point, save_path=image_path, show=False)
-    encoded_image = base64.b64encode(image_path.read_bytes()).decode("ascii")
-
-    duration, missile_id = compute_interference_stats(system, jammer, targeted)
-
-    payload = {
-        "durations": durations,
-        "intervals": {key: [[float(start), float(end)] for start, end in values] for key, values in intervals.items()},
-        "total_duration": float(total_duration),
-        "targeted_missiles": targeted,
-        "drone_count": len(system.drones),
-        "jammers": [
-            {
-                "drone": drone_id,
-                "jammer": 1,
-                "duration": duration,
-                "missile": missile_id,
-            }
-        ],
-        "context": {
-            "occlusion": occlusion,
-            "time": time_point,
-            "release_time": release_time,
-            "smoke_delay": smoke_delay,
-            "image": f"data:image/png;base64,{encoded_image}",
-            "download": f"/download/photos/{image_path.relative_to(OUTPUT_DIR / 'photos')}"
-            if image_path.exists()
-            else None,
-        },
-        "downloads": {
-            "image": f"/download/photos/{image_path.relative_to(OUTPUT_DIR / 'photos')}"
-            if image_path.exists()
-            else None,
-        },
-    }
-    return payload
-
-
-def _run_optimisation_question(question_id: str, overrides: Dict[str, Any]) -> Dict[str, Any]:
-    preset = QUESTION_PRESETS[question_id]
-    params = deepcopy(preset.get("params", {}))
-
-    for name, config in preset.get("form", {}).items():
-        if name not in overrides:
-            continue
-        value = overrides[name]
-        if value is None:
-            continue
-        params[name] = value
-
-    targeted = params.get("targeted_missile_ids", [])
-    qname = params.get("Qname", question_id)
-    json_path = OUTPUT_DIR / "log" / f"{qname}.json"
-    excel_path = OUTPUT_DIR / "excel" / f"{qname}.xlsx"
-
-    workflow = run_genetic_workflow(
-        params.get("drone_ids", []),
-        params.get("n_jammers", 1),
-        params.get("population_size", 100),
-        params.get("generations", 50),
-        targeted,
-        random_seed=params.get("random_seed"),
-        save_json=False,
-        export_excel_path=excel_path,
-    )
-
-    history = workflow.fitness_history
-    simulation = workflow.optimisation_result
-
-    params_with_history = dict(params)
-    params_with_history["history"] = history
-    _save_plan_with_metadata(simulation, params_with_history, json_path)
-
-    summary = _simulation_payload(simulation, targeted)
-    summary["history"] = history
-    summary["plan_name"] = json_path.name
-    summary["downloads"] = {
-        "json": f"/download/log/{json_path.name}",
-        "excel": f"/download/excel/{qname}.xlsx",
-    }
-    summary["metadata"] = {
-        "fitness": max(history) if history else None,
-        "generated_at": datetime.utcnow().isoformat(),
-        "question": qname,
-        "parameters": {
-            "drone_ids": params.get("drone_ids"),
-            "n_jammers": params.get("n_jammers"),
-            "population_size": params.get("population_size"),
-            "generations": params.get("generations"),
-            "random_seed": params.get("random_seed"),
-        },
-    }
-    return summary
-
-
-def _parse_overrides(payload: Dict[str, Any], question_id: str) -> Dict[str, Any]:
-    overrides = {}
-    form = QUESTION_PRESETS.get(question_id, {}).get("form", {})
-    for key, config in form.items():
-        if key not in payload:
-            continue
-        value = payload[key]
-        if value in (None, ""):
-            continue
-        value_type = config.get("value_type")
-        if value_type == "int":
-            overrides[key] = int(value)
-        elif value_type == "float":
-            overrides[key] = float(value)
-        else:
-            overrides[key] = value
-    return overrides
-
 
 @app.route("/")
 def index() -> str:
     selected = request.args.get("plan")
-    dashboard = _build_dashboard_payload(selected)
+    dashboard = build_dashboard_payload(selected)
     return render_template_string(
         TEMPLATE,
         initial_payload=dashboard,
-        question_metadata=_question_metadata(),
-        missile_options=_default_missiles(),
+        question_metadata=question_metadata(),
+        missile_options=default_missiles(),
     )
 
 
 @app.get("/api/dashboard")
 def dashboard_api():
     selected = request.args.get("plan")
-    return jsonify(_build_dashboard_payload(selected))
+    return jsonify(build_dashboard_payload(selected))
 
 
 @app.post("/api/run_question")
@@ -1296,16 +720,27 @@ def run_question_api():
     question_id = payload.get("question")
     if not question_id or question_id not in QUESTION_PRESETS:
         return jsonify({"error": "未知的题目编号"}), 400
-
     try:
-        overrides = _parse_overrides(payload.get("overrides", {}), question_id)
-        if QUESTION_PRESETS[question_id].get("type") == "analysis":
-            summary = _run_q1_analysis(overrides)
-        else:
-            summary = _run_optimisation_question(question_id, overrides)
+        overrides = parse_overrides(payload.get("overrides", {}), question_id)
+        summary = run_question(question_id, overrides)
         return jsonify({"summary": summary})
     except Exception as exc:  # pragma: no cover - unexpected runtime errors converted to JSON
         return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/run_question_stream")
+def run_question_stream():
+    payload = request.get_json(force=True, silent=True) or {}
+    question_id = payload.get("question")
+    if not question_id or question_id not in QUESTION_PRESETS:
+        return jsonify({"error": "未知的题目编号"}), 400
+    overrides = parse_overrides(payload.get("overrides", {}), question_id)
+
+    def _generate():
+        for item in stream_question(question_id, overrides):
+            yield json.dumps(item, ensure_ascii=False) + "\n"
+
+    return Response(stream_with_context(_generate()), mimetype="application/x-ndjson")
 
 
 @app.post("/api/verify_plan")
@@ -1318,10 +753,10 @@ def verify_plan_api():
     if not plan_path.exists():
         return jsonify({"error": "方案不存在"}), 404
 
-    plan, raw_payload = _load_plan(plan_path)
-    missiles = payload.get("missiles") or raw_payload.get("targeted_missiles") or _default_missiles()
+    plan, raw_payload = load_plan(plan_path)
+    missiles = payload.get("missiles") or raw_payload.get("targeted_missiles") or default_missiles()
     simulation = verify_plan(plan, missiles)
-    summary = _simulation_payload(simulation, missiles)
+    summary = simulation_payload(simulation, missiles)
     summary["plan_name"] = plan_name
     summary["downloads"] = {
         "json": f"/download/log/{plan_name}",
