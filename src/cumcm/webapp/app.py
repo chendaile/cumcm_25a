@@ -167,7 +167,11 @@ TEMPLATE = """
                 <h2>题目运行</h2>
                 <div>
                     <label for=\"question-select\">选择题目</label>
-                    <select id=\"question-select\"></select>
+                    <select id=\"question-select\">
+                        {% for preset in question_metadata %}
+                        <option value=\"{{ preset.id }}\"{% if loop.first %} selected{% endif %}>{{ preset.category }} · {{ preset.label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class=\"question-info\" id=\"question-info\"></div>
                 <div class=\"form-grid\" id=\"question-parameters\"></div>
@@ -462,19 +466,45 @@ TEMPLATE = """
 
         function initQuestions() {
             const select = document.getElementById('question-select');
+            if (!select) return;
+
+            const presets = Array.isArray(questionPresets) ? questionPresets : [];
+            if (!presets.length) {
+                if (!select.options.length) {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.textContent = '暂无题目';
+                    select.appendChild(option);
+                }
+                select.disabled = true;
+                renderQuestionInfo(null);
+                renderQuestionForm(null);
+                updateQuestionProgress('');
+                return;
+            }
+
+            select.disabled = false;
+            const previousValue = select.value;
             select.innerHTML = '';
-            questionPresets.forEach(preset => {
+            presets.forEach(preset => {
                 const option = document.createElement('option');
                 option.value = preset.id;
                 option.textContent = `${preset.category} · ${preset.label}`;
                 select.appendChild(option);
             });
-            const defaultPreset = questionPresets[0];
+
+            let defaultPreset = presets.find(item => item.id === previousValue);
+            if (!defaultPreset) {
+                defaultPreset = presets[0];
+            }
+
+            if (defaultPreset) {
+                select.value = defaultPreset.id;
+            }
             renderQuestionInfo(defaultPreset);
             renderQuestionForm(defaultPreset);
-            select.value = defaultPreset ? defaultPreset.id : '';
             select.addEventListener('change', () => {
-                const preset = questionPresets.find(item => item.id === select.value);
+                const preset = presets.find(item => item.id === select.value);
                 renderQuestionInfo(preset);
                 renderQuestionForm(preset);
                 updateSummary('question', null, null);
